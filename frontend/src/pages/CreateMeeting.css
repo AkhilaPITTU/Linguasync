@@ -1,0 +1,55 @@
+.create-meeting-page{
+
+    height:100vh;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:#0f172a;
+
+}
+
+.create-card{
+
+    width:450px;
+
+    background:#1e293b;
+
+    padding:30px;
+
+    border-radius:15px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:20px;
+
+    color:white;
+
+}
+
+.create-card select{
+
+    padding:12px;
+
+    border-radius:8px;
+
+}
+
+.create-card button{
+
+    padding:14px;
+
+    border:none;
+
+    border-radius:8px;
+
+    cursor:pointer;
+
+    font-size:16px;
+
+}

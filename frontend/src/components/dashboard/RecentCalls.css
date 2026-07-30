@@ -1,0 +1,189 @@
+/* ==========================================
+RECENT CALLS
+========================================== */
+
+.recent-calls{
+
+    width:100%;
+
+}
+
+/* ========================================== */
+
+.call-card{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    background:#18253D;
+
+    border-radius:18px;
+
+    padding:18px;
+
+    margin-bottom:18px;
+
+    transition:.35s;
+
+}
+
+.call-card:hover{
+
+    transform:translateY(-5px);
+
+    box-shadow:0 15px 30px rgba(124,58,237,.18);
+
+}
+
+/* ========================================== */
+
+.call-left{
+
+    display:flex;
+
+    gap:15px;
+
+    align-items:center;
+
+}
+
+.call-left img{
+
+    width:60px;
+
+    height:60px;
+
+    border-radius:50%;
+
+    border:2px solid #7C3AED;
+
+}
+
+/* ========================================== */
+
+.call-left h3{
+
+    color:white;
+
+    margin-bottom:6px;
+
+}
+
+.call-left p{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    color:#06B6D4;
+
+    font-size:14px;
+
+    margin-bottom:5px;
+
+}
+
+.call-left span{
+
+    color:#94A3B8;
+
+    font-size:13px;
+
+}
+
+/* ========================================== */
+
+.call-right{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:flex-end;
+
+    gap:10px;
+
+}
+
+.call-time{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    color:white;
+
+}
+
+.call-right small{
+
+    color:#94A3B8;
+
+}
+
+/* ========================================== */
+
+.call-buttons{
+
+    display:flex;
+
+    gap:10px;
+
+}
+
+.call-buttons button{
+
+    width:40px;
+
+    height:40px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#7C3AED;
+
+    color:white;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+}
+
+.call-buttons button:hover{
+
+    background:#2563EB;
+
+}
+
+/* ========================================== */
+
+@media(max-width:768px){
+
+.call-card{
+
+flex-direction:column;
+
+align-items:flex-start;
+
+gap:18px;
+
+}
+
+.call-right{
+
+align-items:flex-start;
+
+width:100%;
+
+}
+
+}

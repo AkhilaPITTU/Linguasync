@@ -1,0 +1,109 @@
+/* ==========================================
+TRANSLATION ENGINE
+========================================== */
+
+.translation-engine{
+
+    width:100%;
+
+}
+
+/* ========================================== */
+
+.engine-item{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    background:#18253D;
+
+    padding:16px;
+
+    border-radius:16px;
+
+    margin-bottom:15px;
+
+    transition:.3s;
+
+}
+
+.engine-item:hover{
+
+    transform:translateY(-4px);
+
+}
+
+/* ========================================== */
+
+.engine-item svg{
+
+    width:48px;
+
+    height:48px;
+
+    padding:12px;
+
+    border-radius:14px;
+
+    background:#7C3AED;
+
+    color:white;
+
+}
+
+/* ========================================== */
+
+.engine-item small{
+
+    color:#94A3B8;
+
+    display:block;
+
+    margin-bottom:4px;
+
+}
+
+.engine-item h4{
+
+    color:white;
+
+    font-size:16px;
+
+}
+
+/* ========================================== */
+
+.engine-status{
+
+    margin-top:20px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:10px;
+
+    padding:16px;
+
+    border-radius:16px;
+
+    background:#22C55E;
+
+    color:white;
+
+    font-weight:600;
+
+    font-size:15px;
+
+}
+
+.engine-status svg{
+
+    font-size:20px;
+
+}

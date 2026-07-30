@@ -1,0 +1,91 @@
+.language-settings{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:22px;
+}
+
+.language-settings h3{
+
+    color:white;
+
+    font-size:22px;
+}
+
+.setting-card{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+    background:#1b2130;
+
+    padding:16px;
+
+    border-radius:16px;
+
+    border:1px solid rgba(255,255,255,.05);
+}
+
+.setting-card label{
+
+    color:#d6d6d6;
+
+    font-size:14px;
+
+    font-weight:500;
+}
+
+.setting-card select{
+
+    background:#11151f;
+
+    color:white;
+
+    border:1px solid rgba(255,255,255,.1);
+
+    border-radius:10px;
+
+    padding:12px;
+
+    outline:none;
+
+    font-size:14px;
+}
+
+.setting-card select:focus{
+
+    border-color:#6C4DFF;
+}
+
+.save-language-btn{
+
+    margin-top:10px;
+
+    background:#6C4DFF;
+
+    color:white;
+
+    border:none;
+
+    border-radius:14px;
+
+    padding:15px;
+
+    cursor:pointer;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.3s;
+}
+
+.save-language-btn:hover{
+
+    background:#7b60ff;
+}

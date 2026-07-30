@@ -1,0 +1,199 @@
+/* ===========================
+   NAVBAR
+=========================== */
+
+.navbar{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:78px;
+    padding:0 7%;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    z-index:1000;
+    transition:.35s ease;
+    background:rgba(3,7,18,.45);
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    border-bottom:1px solid rgba(255,255,255,.05);
+}
+
+.navbar.scrolled{
+    height:72px;
+    background:rgba(3,7,18,.82);
+    box-shadow:0 10px 35px rgba(0,0,0,.35);
+}
+
+/* ===========================
+   LOGO
+=========================== */
+
+.logo{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:24px;
+    font-weight:800;
+    color:#fff;
+    cursor:pointer;
+    user-select:none;
+}
+
+.logo span{
+    background:linear-gradient(90deg,#7C3AED,#06B6D4);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+
+/* ===========================
+   NAV LINKS
+=========================== */
+
+.nav-links{
+    display:flex;
+    align-items:center;
+    gap:34px;
+}
+
+.nav-links a{
+    color:#d1d5db;
+    text-decoration:none;
+    font-size:15px;
+    font-weight:500;
+    cursor:pointer;
+    transition:.3s;
+    position:relative;
+}
+
+.nav-links a:hover{
+    color:#fff;
+}
+
+.nav-links a::after{
+    content:"";
+    position:absolute;
+    left:0;
+    bottom:-8px;
+    width:0%;
+    height:2px;
+    border-radius:20px;
+    background:linear-gradient(90deg,#7C3AED,#06B6D4);
+    transition:.3s;
+}
+
+.nav-links a:hover::after,
+.nav-links a.active::after{
+    width:100%;
+}
+
+.nav-links .active{
+    color:#06B6D4;
+}
+
+/* ===========================
+   BUTTONS
+=========================== */
+
+.nav-buttons{
+    display:flex;
+    align-items:center;
+    gap:14px;
+}
+
+.login-btn,
+.register-btn{
+    text-decoration:none;
+    padding:10px 20px;
+    border-radius:40px;
+    font-size:14px;
+    font-weight:600;
+    transition:.3s;
+}
+
+.login-btn{
+    color:#fff;
+    border:1px solid rgba(255,255,255,.15);
+    background:rgba(255,255,255,.05);
+}
+
+.login-btn:hover{
+    background:rgba(255,255,255,.10);
+}
+
+.register-btn{
+    color:#fff;
+    background:linear-gradient(90deg,#7C3AED,#06B6D4);
+    box-shadow:0 8px 25px rgba(124,58,237,.35);
+}
+
+.register-btn:hover{
+    transform:translateY(-2px);
+    box-shadow:0 14px 35px rgba(124,58,237,.45);
+}
+
+/* ===========================
+   MOBILE BUTTON
+=========================== */
+
+.menu-btn{
+    display:none;
+    background:none;
+    border:none;
+    color:#fff;
+    font-size:28px;
+    cursor:pointer;
+}
+
+/* ===========================
+   RESPONSIVE
+=========================== */
+
+@media(max-width:992px){
+
+    .navbar{
+        padding:0 25px;
+    }
+
+    .menu-btn{
+        display:block;
+    }
+
+    .nav-links{
+        position:absolute;
+        top:78px;
+        left:-100%;
+        width:100%;
+        background:#030712;
+        display:flex;
+        flex-direction:column;
+        gap:25px;
+        padding:35px 0;
+        transition:.35s;
+        border-top:1px solid rgba(255,255,255,.08);
+    }
+
+    .nav-links.active{
+        left:0;
+    }
+
+    .nav-buttons .login-btn,
+    .nav-buttons .register-btn{
+        display:none;
+    }
+
+}
+
+@media(max-width:576px){
+
+    .logo{
+        font-size:20px;
+    }
+
+    .navbar{
+        height:72px;
+    }
+
+}
