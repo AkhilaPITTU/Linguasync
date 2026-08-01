@@ -1,6 +1,6 @@
 import "./Sidebar.css";
 
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 
 import {
   FiGrid,
@@ -18,6 +18,23 @@ import {
 } from "react-icons/fi";
 
 function Sidebar() {
+
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+
+    // Clear user session
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("user_id");
+    localStorage.removeItem("user_name");
+    localStorage.removeItem("user_email");
+    localStorage.removeItem("user_role");
+
+    // Redirect to Login
+    navigate("/login", { replace: true });
+
+  };
 
   const menu = [
 
@@ -115,7 +132,7 @@ function Sidebar() {
 
           {
 
-            menu.map((item,index)=>(
+            menu.map((item, index) => (
 
               <NavLink
 
@@ -123,7 +140,7 @@ function Sidebar() {
 
                 to={item.path}
 
-                className={({isActive}) =>
+                className={({ isActive }) =>
                   isActive
                     ? "menu active"
                     : "menu"
@@ -182,7 +199,12 @@ function Sidebar() {
 
         </div>
 
-        <button className="logout">
+        {/* Logout */}
+
+        <button
+          className="logout"
+          onClick={handleLogout}
+        >
 
           <FiLogOut />
 

@@ -8,7 +8,16 @@ export const getTranslationHistory = async () => {
 
     try {
 
-        const response = await API.get("/dashboard/translation-history");
+        const token = localStorage.getItem("access_token");
+
+        const response = await API.get(
+            "/dashboard/translation-history",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }
+        );
 
         if (response.data.success) {
 

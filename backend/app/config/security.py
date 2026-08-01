@@ -11,9 +11,6 @@ from app.config.settings import settings
 # ==========================================
 
 def hash_password(password: str) -> str:
-    """
-    Hash a plain password using bcrypt.
-    """
 
     salt = bcrypt.gensalt()
 
@@ -33,9 +30,6 @@ def verify_password(
     plain_password: str,
     hashed_password: str
 ) -> bool:
-    """
-    Compare plain password with hashed password.
-    """
 
     return bcrypt.checkpw(
         plain_password.encode("utf-8"),
@@ -44,13 +38,10 @@ def verify_password(
 
 
 # ==========================================
-# CREATE ACCESS TOKEN (JWT)
+# CREATE ACCESS TOKEN
 # ==========================================
 
 def create_access_token(data: dict) -> str:
-    """
-    Create JWT access token.
-    """
 
     payload = data.copy()
 
@@ -73,6 +64,10 @@ def create_access_token(data: dict) -> str:
         algorithm=settings.ALGORITHM
     )
 
+    print("\n========== TOKEN CREATED ==========")
+    print(token)
+    print("===================================\n")
+
     return token
 
 
@@ -81,11 +76,18 @@ def create_access_token(data: dict) -> str:
 # ==========================================
 
 def verify_token(token: str):
-    """
-    Decode and verify JWT access token.
-    """
 
     try:
+
+        print("\n========== VERIFY TOKEN ==========")
+        print("Incoming Token:")
+        print(token)
+        print("----------------------------------")
+        print("SECRET_KEY:")
+        print(settings.SECRET_KEY)
+        print("----------------------------------")
+        print("ALGORITHM:")
+        print(settings.ALGORITHM)
 
         payload = jwt.decode(
             token,
@@ -93,24 +95,41 @@ def verify_token(token: str):
             algorithms=[settings.ALGORITHM]
         )
 
+        print("----------------------------------")
+        print("PAYLOAD:")
+        print(payload)
+        print("==================================\n")
+
         if payload.get("type") != "access":
+            print("Invalid token type")
             return None
 
         return payload
 
-    except JWTError:
+    except JWTError as e:
+
+        print("\n========== JWT ERROR ==========")
+        print(type(e).__name__)
+        print(str(e))
+        print("===============================\n")
+
+        return None
+
+    except Exception as e:
+
+        print("\n========== UNKNOWN ERROR ==========")
+        print(type(e).__name__)
+        print(str(e))
+        print("===================================\n")
 
         return None
 
 
 # ==========================================
-# GET USER ID FROM TOKEN
+# GET USER ID
 # ==========================================
 
 def get_user_id(token: str):
-    """
-    Extract user_id from JWT.
-    """
 
     payload = verify_token(token)
 
@@ -121,14 +140,10 @@ def get_user_id(token: str):
 
 
 # ==========================================
-# CREATE RESET PASSWORD TOKEN
+# RESET TOKEN
 # ==========================================
 
 def create_reset_token(email: str) -> str:
-    """
-    Generate password reset token.
-    Expires in 15 minutes.
-    """
 
     expire = datetime.now(
         timezone.utc
@@ -154,9 +169,6 @@ def create_reset_token(email: str) -> str:
 # ==========================================
 
 def verify_reset_token(token: str):
-    """
-    Verify password reset token.
-    """
 
     try:
 

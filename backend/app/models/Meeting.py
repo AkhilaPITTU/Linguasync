@@ -44,7 +44,15 @@ class Meeting(BaseModel):
     # Translation Information
     source_language: str = "Detecting..."
 
-    target_language: str
+    preferred_language: str
+
+    output_mode: Literal[
+        "original",
+        "text",
+        "speech",
+        "text_speech",
+        "translated_speech"
+    ]
 
     translation_status: Literal["Running", "Stopped"] = "Running"
 

@@ -20,7 +20,10 @@ import {
 
 import webrtcService from "../../services/webrtcService";
 import websocketService from "../../services/websocketService";
-import { leaveMeeting as leaveMeetingAPI } from "../../services/meetingService";
+
+import {
+    leaveMeeting as leaveMeetingAPI
+} from "../../services/meetingService";
 
 const BottomControls = () => {
 
@@ -33,6 +36,10 @@ const BottomControls = () => {
     const meetingId = window.location.pathname.split("/").pop();
     const userId = localStorage.getItem("user_id");
 
+    // ==========================
+    // Toggle Microphone
+    // ==========================
+
     const toggleMic = () => {
 
         const stream = webrtcService.localStream;
@@ -40,12 +47,18 @@ const BottomControls = () => {
         if (!stream) return;
 
         stream.getAudioTracks().forEach(track => {
+
             track.enabled = !track.enabled;
+
         });
 
         setMicOn(prev => !prev);
 
     };
+
+    // ==========================
+    // Toggle Camera
+    // ==========================
 
     const toggleCamera = () => {
 
@@ -54,12 +67,18 @@ const BottomControls = () => {
         if (!stream) return;
 
         stream.getVideoTracks().forEach(track => {
+
             track.enabled = !track.enabled;
+
         });
 
         setCameraOn(prev => !prev);
 
     };
+
+    // ==========================
+    // Toggle Speaker
+    // ==========================
 
     const toggleSpeaker = () => {
 
@@ -67,11 +86,21 @@ const BottomControls = () => {
 
     };
 
+    // ==========================
+    // Add Participants
+    // ==========================
+
     const handleAddParticipants = () => {
 
         navigate(`/meeting/${meetingId}/participants`);
 
     };
+
+    // ==========================
+    // Leave Meeting
+    // Backend decides whether to
+    // end meeting or remove user.
+    // ==========================
 
     const leaveMeeting = async () => {
 
@@ -79,17 +108,26 @@ const BottomControls = () => {
 
             if (meetingId && userId) {
 
-                await leaveMeetingAPI(meetingId, userId);
+                await leaveMeetingAPI(
+                    meetingId,
+                    userId
+                );
 
             }
 
-        } catch (error) {
+        }
 
-            console.error(error);
+        catch (error) {
+
+            console.error(
+                "Leave Meeting Error:",
+                error
+            );
 
         }
 
         websocketService.disconnect();
+
         webrtcService.closeConnection();
 
         navigate("/dashboard");
@@ -109,7 +147,13 @@ const BottomControls = () => {
                     onClick={toggleMic}
                     title="Microphone"
                 >
-                    {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+
+                    {
+                        micOn
+                            ? <FaMicrophone />
+                            : <FaMicrophoneSlash />
+                    }
+
                 </button>
 
                 <button
@@ -117,7 +161,13 @@ const BottomControls = () => {
                     onClick={toggleCamera}
                     title="Camera"
                 >
-                    {cameraOn ? <FaVideo /> : <FaVideoSlash />}
+
+                    {
+                        cameraOn
+                            ? <FaVideo />
+                            : <FaVideoSlash />
+                    }
+
                 </button>
 
                 <button
@@ -125,7 +175,13 @@ const BottomControls = () => {
                     onClick={toggleSpeaker}
                     title="Speaker"
                 >
-                    {speakerOn ? <FaVolumeUp /> : <FaVolumeMute />}
+
+                    {
+                        speakerOn
+                            ? <FaVolumeUp />
+                            : <FaVolumeMute />
+                    }
+
                 </button>
 
             </div>
@@ -139,42 +195,54 @@ const BottomControls = () => {
                     onClick={handleAddParticipants}
                     title="Add Participants"
                 >
+
                     <FaUserPlus />
+
                 </button>
 
                 <button
                     className="control-btn"
                     title="Participants"
                 >
+
                     <FaUsers />
+
                 </button>
 
                 <button
                     className="control-btn"
                     title="Chat"
                 >
+
                     <FaComments />
+
                 </button>
 
                 <button
                     className="control-btn"
                     title="Live Captions"
                 >
+
                     <FaClosedCaptioning />
+
                 </button>
 
                 <button
                     className="control-btn"
                     title="Translation"
                 >
+
                     <FaLanguage />
+
                 </button>
 
                 <button
                     className="control-btn"
                     title="Download Transcript"
                 >
+
                     <FaDownload />
+
                 </button>
 
             </div>
@@ -188,8 +256,15 @@ const BottomControls = () => {
                     onClick={leaveMeeting}
                     title="Leave Meeting"
                 >
+
                     <FaPhoneSlash />
-                    <span>Leave</span>
+
+                    <span>
+
+                        Leave
+
+                    </span>
+
                 </button>
 
             </div>

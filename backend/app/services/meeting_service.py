@@ -16,7 +16,8 @@ meetings_collection = database["meetings"]
 async def create_meeting(
     host_id: str,
     meeting_type: str,
-    target_language: str
+    preferred_language: str,
+    output_mode: str
 ):
 
     # Get Host Details
@@ -25,7 +26,6 @@ async def create_meeting(
     )
 
     if not user:
-
         return {
             "success": False,
             "message": "Host not found."
@@ -43,7 +43,7 @@ async def create_meeting(
             {
                 "user_id": host_id,
                 "user_name": host_name,
-                "language": target_language,
+                "language": preferred_language,
                 "mic_enabled": True,
                 "camera_enabled": True,
                 "screen_share": False,
@@ -57,7 +57,9 @@ async def create_meeting(
 
         source_language="Detecting...",
 
-        target_language=target_language,
+        preferred_language=preferred_language,
+
+        output_mode=output_mode,
 
         translation_status="Running",
 
@@ -76,13 +78,9 @@ async def create_meeting(
     )
 
     return {
-
         "success": True,
-
         "message": "Meeting created successfully.",
-
         "meeting": meeting.model_dump()
-
     }
 
 
@@ -105,65 +103,40 @@ async def join_meeting(
     )
 
     if not meeting:
-
         return {
-
             "success": False,
-
             "message": "Meeting not found."
-
         }
 
     exists = any(
-
         participant["user_id"] == user_id
-
         for participant in meeting["participants"]
-
     )
 
     if not exists:
 
         participant = {
-
             "user_id": user_id,
-
             "user_name": user_name,
-
             "language": language,
-
             "mic_enabled": True,
-
             "camera_enabled": True,
-
             "screen_share": False,
-
             "speaking": False
-
         }
 
         await meetings_collection.update_one(
-
             {"meeting_id": meeting_id},
-
             {
-
                 "$push": {
-
                     "participants": participant
-
                 }
-
             }
-
         )
 
     return {
-
         "success": True,
-
         "message": "Joined meeting successfully."
-
     }
 
 
@@ -177,48 +150,67 @@ async def leave_meeting(
 ):
 
     meeting = await meetings_collection.find_one(
-        {"meeting_id": meeting_id}
+        {
+            "meeting_id": meeting_id
+        }
     )
 
     if not meeting:
 
         return {
-
             "success": False,
-
             "message": "Meeting not found."
-
         }
 
+    # First remove the participant
     await meetings_collection.update_one(
-
-        {"meeting_id": meeting_id},
-
         {
-
+            "meeting_id": meeting_id
+        },
+        {
             "$pull": {
-
                 "participants": {
-
                     "user_id": user_id
-
                 }
-
             }
-
         }
-
     )
 
+    # Get updated meeting
+    updated_meeting = await meetings_collection.find_one(
+        {
+            "meeting_id": meeting_id
+        }
+    )
+
+    participant_count = len(updated_meeting["participants"])
+
+    # If 0 or 1 participants remain, end the meeting
+    if participant_count <= 1:
+
+        await meetings_collection.update_one(
+            {
+                "meeting_id": meeting_id
+            },
+            {
+                "$set": {
+                    "status": "completed",
+                    "translation_status": "Stopped",
+                    "ended_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+
+        return {
+            "success": True,
+            "message": "Meeting ended successfully."
+        }
+
     return {
-
         "success": True,
-
-        "message": "Left meeting successfully."
-
+        "message": "Left meeting successfully.",
+        "participants": participant_count
     }
-
-
 # ==========================================
 # END MEETING
 # ==========================================
@@ -229,59 +221,35 @@ async def end_meeting(
 ):
 
     meeting = await meetings_collection.find_one(
-
         {
-
             "meeting_id": meeting_id,
-
             "host_id": host_id
-
         }
-
     )
 
     if not meeting:
-
         return {
-
             "success": False,
-
             "message": "Meeting not found."
-
         }
 
     await meetings_collection.update_one(
-
         {
-
             "meeting_id": meeting_id
-
         },
-
         {
-
             "$set": {
-
                 "status": "completed",
-
                 "translation_status": "Stopped",
-
                 "ended_at": datetime.now(timezone.utc)
-
             }
-
         }
-
     )
 
     return {
-
         "success": True,
-
         "message": "Meeting ended successfully."
-
     }
-
 
 # ==========================================
 # GET MEETING
@@ -292,37 +260,23 @@ async def get_meeting(
 ):
 
     meeting = await meetings_collection.find_one(
-
         {
-
             "meeting_id": meeting_id
-
         },
-
         {
-
             "_id": 0
-
         }
-
     )
 
     if not meeting:
-
         return {
-
             "success": False,
-
             "message": "Meeting not found."
-
         }
 
     return {
-
         "success": True,
-
         "meeting": meeting
-
     }
 
 
@@ -335,37 +289,23 @@ async def get_participants(
 ):
 
     meeting = await meetings_collection.find_one(
-
         {
-
             "meeting_id": meeting_id
-
         },
-
         {
-
             "_id": 0
-
         }
-
     )
 
     if not meeting:
-
         return {
-
             "success": False,
-
             "message": "Meeting not found."
-
         }
 
     return {
-
         "success": True,
-
         "participants": meeting["participants"]
-
     }
 
 
@@ -373,22 +313,58 @@ async def get_participants(
 # GET ACTIVE MEETING
 # ==========================================
 
-async def get_active_meeting():
+async def get_active_meeting(user_id: str):
 
     meeting = await meetings_collection.find_one(
-        {"status": "active"},
-        {"_id": 0}
+        {
+            "status": "active",
+            "$or": [
+                {"host_id": user_id},
+                {"participants.user_id": user_id}
+            ]
+        },
+        {
+            "_id": 0
+        }
     )
 
-    if not meeting:
+    if meeting is None:
         return {
-            "success": False,
-            "message": "No active meeting."
+            "success": True,
+            "meeting": None
         }
+    # Hide completed/empty meetings
+    if len(meeting["participants"]) == 0:
+        await meetings_collection.update_one(
+            {
+                "meeting_id": meeting["meeting_id"]
+            },
+            {
+                "$set": {
+                    "status": "completed",
+                    "translation_status": "Stopped",
+                    "ended_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+
+        return {
+            "success": True,
+            "meeting": None
+        }
+
+    host = await users_collection.find_one(
+        {"_id": ObjectId(meeting["host_id"])},
+        {"full_name": 1}
+    )
+
+    host_name = "Meeting Host"
+
+    if host:
+        host_name = host.get("full_name", "Meeting Host")
 
     started_at = meeting["started_at"]
 
-    # Convert MongoDB naive datetime to UTC-aware datetime
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
 
@@ -407,14 +383,32 @@ async def get_active_meeting():
         "meeting": {
             "meeting_id": meeting["meeting_id"],
             "host_id": meeting["host_id"],
+            "host_name": host_name,
             "meeting_type": meeting["meeting_type"],
             "participants": len(meeting["participants"]),
+            "participant_list": meeting["participants"],
             "status": meeting["status"],
-            "source_language": meeting["source_language"],
-            "target_language": meeting["target_language"],
-            "translation_status": meeting["translation_status"],
-            "microphone_status": meeting["microphone_status"],
-            "camera_status": meeting["camera_status"],
+            "source_language": meeting.get("source_language", "Detecting..."),
+            "preferred_language": meeting.get(
+                "preferred_language",
+                meeting.get("target_language", "English")
+            ),
+            "output_mode": meeting.get(
+                "output_mode",
+                "original"
+            ),
+            "translation_status": meeting.get(
+                "translation_status",
+                "Running"
+            ),
+            "microphone_status": meeting.get(
+                "microphone_status",
+                "ON"
+            ),
+            "camera_status": meeting.get(
+                "camera_status",
+                "ON"
+            ),
             "duration": duration_text
         }
     }

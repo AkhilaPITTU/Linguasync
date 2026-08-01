@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import { createMeeting } from "../services/meetingService";
-
 import "./CreateMeeting.css";
 
 function CreateMeeting() {
@@ -11,6 +9,17 @@ function CreateMeeting() {
 
     const [meetingType, setMeetingType] = useState("video");
     const [language, setLanguage] = useState("English");
+
+    // Audio:
+    // original | translated_speech
+    //
+    // Video:
+    // original
+    // text
+    // speech
+    // text_speech
+    const [outputMode, setOutputMode] = useState("original");
+
     const [loading, setLoading] = useState(false);
 
     const handleCreateMeeting = async () => {
@@ -20,38 +29,47 @@ function CreateMeeting() {
             setLoading(true);
 
             const response = await createMeeting({
-                meeting_type: meetingType,
-                target_language: language
-            });
 
-            console.log("Create Meeting Response:", response);
+                meeting_type: meetingType,
+
+                preferred_language: language,
+
+                output_mode: outputMode
+
+            });
 
             if (
                 !response ||
                 !response.success ||
                 !response.meeting
             ) {
+
                 alert("Unable to create meeting.");
                 return;
+
             }
 
             const meetingId = response.meeting.meeting_id;
 
-            // Save meeting id
             localStorage.setItem("meeting_id", meetingId);
 
-            // Navigate to Meeting Room
             navigate(`/meeting/${meetingId}`);
 
         } catch (error) {
 
-            console.error("Create Meeting Error:", error);
+            console.error(error);
 
             if (error.response) {
-                console.error(error.response.data);
-                alert(error.response.data.detail || "Unable to create meeting.");
+
+                alert(
+                    error.response.data.detail ||
+                    "Unable to create meeting."
+                );
+
             } else {
+
                 alert("Server is not responding.");
+
             }
 
         } finally {
@@ -64,44 +82,347 @@ function CreateMeeting() {
 
     return (
 
-        <div className="create-meeting-page">
+        <div className="create-page">
 
             <div className="create-card">
 
                 <h1>Create Meeting</h1>
 
-                <label>Meeting Type</label>
+                <p className="subtitle">
 
-                <select
-                    value={meetingType}
-                    onChange={(e) => setMeetingType(e.target.value)}
-                >
-                    <option value="video">Video Meeting</option>
-                    <option value="audio">Audio Meeting</option>
-                </select>
+                    Create a multilingual audio or video meeting.
 
-                <label>Target Language</label>
+                </p>
 
-                <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                >
-                    <option value="English">English</option>
-                    <option value="Hindi">Hindi</option>
-                    <option value="Telugu">Telugu</option>
-                    <option value="Tamil">Tamil</option>
-                    <option value="Kannada">Kannada</option>
-                    <option value="Malayalam">Malayalam</option>
-                    <option value="French">French</option>
-                    <option value="German">German</option>
-                    <option value="Spanish">Spanish</option>
-                </select>
+                <h3 className="section-title">
 
-                <button
+                    Select Meeting Type
+
+                </h3>
+
+                <div className="meeting-options">
+
+                    <div
+                        className={
+                            meetingType === "audio"
+                                ? "meeting-box active"
+                                : "meeting-box"
+                        }
+                        onClick={() => {
+
+                            setMeetingType("audio");
+                            setOutputMode("original");
+
+                        }}
+                    >
+
+                        <div className="meeting-icon">
+                            🎧
+                        </div>
+
+                        <h3>Audio Call</h3>
+
+                        <p>
+
+                            Voice communication with optional
+                            translated speech.
+
+                        </p>
+
+                    </div>
+
+                    <div
+                        className={
+                            meetingType === "video"
+                                ? "meeting-box active"
+                                : "meeting-box"
+                        }
+                        onClick={() => {
+
+                            setMeetingType("video");
+                            setOutputMode("original");
+
+                        }}
+                    >
+
+                        <div className="meeting-icon">
+                            📹
+                        </div>
+
+                        <h3>Video Call</h3>
+
+                        <p>
+
+                            Video meeting with multiple
+                            translation modes.
+
+                        </p>
+
+                    </div>
+
+                </div>
+
+                <div className="form-group">
+
+                    <label>
+
+                        🌐 My Preferred Language
+
+                    </label>
+
+                    <select
+                        value={language}
+                        onChange={(e) =>
+                            setLanguage(e.target.value)
+                        }
+                    >
+
+                        <option>English</option>
+                        <option>Hindi</option>
+                        <option>Telugu</option>
+                        <option>Tamil</option>
+                        <option>Kannada</option>
+                        <option>Malayalam</option>
+                        <option>French</option>
+                        <option>German</option>
+                        <option>Spanish</option>
+
+                    </select>
+
+                </div>
+
+                {/* AUDIO OPTIONS */}
+
+                {
+                    meetingType === "audio" && (
+
+                        <div className="form-group">
+
+                            <label>
+
+                                🎵 Output Mode
+
+                            </label>
+
+                                                        <div className="mode-container">
+
+                                <div
+                                    className={
+                                        outputMode === "original"
+                                            ? "mode-card active"
+                                            : "mode-card"
+                                    }
+                                    onClick={() =>
+                                        setOutputMode("original")
+                                    }
+                                >
+                                    <div className="mode-icon">🎤</div>
+
+                                    <div>
+
+                                        <h4>Original Voice</h4>
+
+                                        <p>No Translation</p>
+
+                                    </div>
+
+                                </div>
+
+                                <div
+                                    className={
+                                        outputMode === "translated_speech"
+                                            ? "mode-card active"
+                                            : "mode-card"
+                                    }
+                                    onClick={() =>
+                                        setOutputMode("translated_speech")
+                                    }
+                                >
+                                    <div className="mode-icon">🔊</div>
+
+                                    <div>
+
+                                        <h4>Translated Speech</h4>
+
+                                        <p>
+
+                                            Hear translated audio
+                                            in your language
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    )
+                }
+
+                {/* VIDEO OPTIONS */}
+
+                {
+                    meetingType === "video" && (
+
+                        <div className="form-group">
+
+                            <label>
+
+                                📤 Output Mode
+
+                            </label>
+
+                            <div className="mode-container">
+
+                                <div
+                                    className={
+                                        outputMode === "original"
+                                            ? "mode-card active"
+                                            : "mode-card"
+                                    }
+                                    onClick={() =>
+                                        setOutputMode("original")
+                                    }
+                                >
+                                    <div className="mode-icon">
+                                        🎤
+                                    </div>
+
+                                    <div>
+
+                                        <h4>
+
+                                            Original Voice
+
+                                        </h4>
+
+                                        <p>
+
+                                            Normal video call
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div
+                                    className={
+                                        outputMode === "text"
+                                            ? "mode-card active"
+                                            : "mode-card"
+                                    }
+                                    onClick={() =>
+                                        setOutputMode("text")
+                                    }
+                                >
+                                    <div className="mode-icon">
+                                        📝
+                                    </div>
+
+                                    <div>
+
+                                        <h4>
+
+                                            Translated Text
+
+                                        </h4>
+
+                                        <p>
+
+                                            Hear original voice +
+                                            translated subtitles
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div
+                                    className={
+                                        outputMode === "speech"
+                                            ? "mode-card active"
+                                            : "mode-card"
+                                    }
+                                    onClick={() =>
+                                        setOutputMode("speech")
+                                    }
+                                >
+                                    <div className="mode-icon">
+                                        🔊
+                                    </div>
+
+                                    <div>
+
+                                        <h4>
+
+                                            Translated Speech
+
+                                        </h4>
+
+                                        <p>
+
+                                            Hear translated voice
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                                <div
+                                    className={
+                                        outputMode === "text_speech"
+                                            ? "mode-card active"
+                                            : "mode-card"
+                                    }
+                                    onClick={() =>
+                                        setOutputMode("text_speech")
+                                    }
+                                >
+                                    <div className="mode-icon">
+                                        ✨
+                                    </div>
+
+                                    <div>
+
+                                        <h4>
+
+                                            Text + Speech
+
+                                        </h4>
+
+                                        <p>
+
+                                            Subtitle +
+                                            translated voice
+
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    )
+                }
+                                <button
+                    className="create-btn"
                     onClick={handleCreateMeeting}
                     disabled={loading}
                 >
-                    {loading ? "Creating..." : "Create Meeting"}
+                    {loading
+                        ? "Creating..."
+                        : meetingType === "audio"
+                        ? "🎧 Create Audio Meeting"
+                        : "📹 Create Video Meeting"}
                 </button>
 
             </div>
@@ -113,3 +434,4 @@ function CreateMeeting() {
 }
 
 export default CreateMeeting;
+                            

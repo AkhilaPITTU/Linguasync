@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from app.controllers.meeting_controller import (
     create_meeting_controller,
@@ -91,9 +91,13 @@ async def end_meeting(
 # ==========================================
 
 @router.get("/active")
-async def get_active_meeting():
+async def get_active_meeting(
+    authorization: str = Header(...)
+):
 
-    return await get_active_meeting_controller()
+    return await get_active_meeting_controller(
+        authorization=authorization
+    )
 
 
 # ==========================================

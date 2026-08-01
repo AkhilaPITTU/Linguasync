@@ -8,7 +8,16 @@ export const getRecentActivity = async () => {
 
     try {
 
-        const response = await API.get("/dashboard/recent-activity");
+        const token = localStorage.getItem("access_token");
+
+        const response = await API.get(
+            "/dashboard/recent-activity",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }
+        );
 
         if (response.data.success) {
 
