@@ -1,0 +1,113 @@
+.transcript-panel{
+
+    display:flex;
+
+    flex-direction:column;
+
+    height:100%;
+}
+
+/* Header */
+
+.transcript-header{
+
+    margin-bottom:18px;
+}
+
+.transcript-header h3{
+
+    color:#fff;
+
+    font-size:22px;
+}
+
+/* List */
+
+.transcript-list{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:14px;
+
+    overflow-y:auto;
+}
+
+/* Card */
+
+.transcript-card{
+
+    background:#1b2130;
+
+    border-radius:16px;
+
+    padding:16px;
+
+    border:1px solid rgba(255,255,255,.05);
+
+    transition:.25s;
+}
+
+.transcript-card:hover{
+
+    background:#242d43;
+}
+
+/* Top */
+
+.transcript-top{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:10px;
+}
+
+.speaker{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    color:#fff;
+
+    font-size:15px;
+}
+
+.time{
+
+    color:#8b93a7;
+
+    font-size:13px;
+}
+
+/* Message */
+
+.transcript-card p{
+
+    color:#d8d8d8;
+
+    line-height:1.6;
+
+    font-size:15px;
+}
+
+/* Scroll */
+
+.transcript-list::-webkit-scrollbar{
+
+    width:6px;
+}
+
+.transcript-list::-webkit-scrollbar-thumb{
+
+    background:#6C4DFF;
+
+    border-radius:20px;
+}

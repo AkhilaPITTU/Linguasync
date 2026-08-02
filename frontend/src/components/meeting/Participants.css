@@ -1,0 +1,169 @@
+.participants{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:16px;
+}
+
+/* Header */
+
+.participants-header{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:8px;
+}
+
+.participants-header h3{
+
+    color:white;
+
+    font-size:22px;
+}
+
+.participants-header span{
+
+    background:#6C4DFF;
+
+    color:white;
+
+    width:32px;
+
+    height:32px;
+
+    border-radius:50%;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-weight:bold;
+}
+
+/* Card */
+
+.participant-card{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    background:#1b2130;
+
+    border-radius:16px;
+
+    padding:14px;
+
+    transition:.25s;
+
+    border:1px solid rgba(255,255,255,.05);
+}
+
+.participant-card:hover{
+
+    background:#242d43;
+}
+
+/* Left */
+
+.participant-left{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:14px;
+}
+
+.avatar{
+
+    width:50px;
+
+    height:50px;
+
+    border-radius:50%;
+
+    background:#6C4DFF;
+
+    color:white;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-size:20px;
+
+    font-weight:bold;
+}
+
+.participant-left h4{
+
+    color:white;
+
+    margin-bottom:4px;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    font-size:15px;
+}
+
+.participant-left p{
+
+    color:#9ca3af;
+
+    font-size:13px;
+}
+
+/* You */
+
+.you-tag{
+
+    background:#14ff83;
+
+    color:#111;
+
+    padding:2px 8px;
+
+    border-radius:20px;
+
+    font-size:11px;
+
+    font-weight:bold;
+}
+
+/* Right */
+
+.participant-right{
+
+    display:flex;
+
+    gap:10px;
+
+    font-size:20px;
+}
+
+.status-on{
+
+    opacity:1;
+}
+
+.status-off{
+
+    opacity:.35;
+}

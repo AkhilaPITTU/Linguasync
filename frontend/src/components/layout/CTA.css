@@ -1,0 +1,198 @@
+.cta{
+    position:relative;
+    padding:50px 8%;
+    background:#030712;
+    overflow:hidden;
+}
+
+/* ========================= */
+/* Background Glow */
+/* ========================= */
+
+.cta::before{
+    content:"";
+    position:absolute;
+    width:320px;
+    height:320px;
+    background:#7C3AED;
+    filter:blur(160px);
+    opacity:.08;
+    top:-120px;
+    left:-120px;
+}
+
+.cta::after{
+    content:"";
+    position:absolute;
+    width:320px;
+    height:320px;
+    background:#06B6D4;
+    filter:blur(160px);
+    opacity:.08;
+    bottom:-120px;
+    right:-120px;
+}
+
+/* ========================= */
+/* Card */
+/* ========================= */
+
+.cta-card{
+    position:relative;
+    z-index:2;
+    max-width:900px;
+    margin:auto;
+    padding:40px 35px;
+    text-align:center;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.08);
+    backdrop-filter:blur(18px);
+    border-radius:22px;
+    overflow:hidden;
+}
+
+.cta-card::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(
+        130deg,
+        transparent,
+        rgba(255,255,255,.06),
+        transparent
+    );
+    transform:translateX(-120%);
+    transition:.7s;
+}
+
+.cta-card:hover::before{
+    transform:translateX(120%);
+}
+
+/* ========================= */
+/* Badge */
+/* ========================= */
+
+.cta-badge{
+    display:inline-block;
+    padding:6px 16px;
+    border-radius:30px;
+    background:rgba(124,58,237,.15);
+    border:1px solid rgba(124,58,237,.25);
+    color:#8BC8FF;
+    font-size:12px;
+    font-weight:600;
+    margin-bottom:18px;
+}
+
+/* ========================= */
+/* Heading */
+/* ========================= */
+
+.cta-card h2{
+    color:#fff;
+    font-size:32px;
+    font-weight:800;
+    margin-bottom:16px;
+}
+
+.cta-card h2 span{
+    background:linear-gradient(90deg,#7C3AED,#06B6D4);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+
+/* ========================= */
+/* Description */
+/* ========================= */
+
+.cta-card p{
+    max-width:620px;
+    margin:auto;
+    color:#CBD5E1;
+    font-size:15px;
+    line-height:1.7;
+}
+
+/* ========================= */
+/* Buttons */
+/* ========================= */
+
+.cta-buttons{
+    margin-top:30px;
+    display:flex;
+    justify-content:center;
+    gap:16px;
+    flex-wrap:wrap;
+}
+
+.cta-buttons a{
+    text-decoration:none;
+}
+
+.primary-btn,
+.secondary-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:12px 24px;
+    border-radius:50px;
+    font-size:15px;
+    font-weight:600;
+    transition:.3s;
+}
+
+.primary-btn{
+    background:linear-gradient(90deg,#7C3AED,#06B6D4);
+    color:#fff;
+}
+
+.primary-btn:hover{
+    transform:translateY(-4px);
+}
+
+.secondary-btn{
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);
+    color:#fff;
+}
+
+.secondary-btn:hover{
+    background:rgba(255,255,255,.14);
+    transform:translateY(-4px);
+}
+
+/* ========================= */
+/* Responsive */
+/* ========================= */
+
+@media(max-width:768px){
+
+    .cta{
+        padding:40px 20px;
+    }
+
+    .cta-card{
+        padding:30px 20px;
+    }
+
+    .cta-card h2{
+        font-size:26px;
+    }
+
+    .cta-card p{
+        font-size:14px;
+    }
+
+    .cta-buttons{
+        flex-direction:column;
+    }
+
+    .primary-btn,
+    .secondary-btn{
+        width:100%;
+    }
+
+}

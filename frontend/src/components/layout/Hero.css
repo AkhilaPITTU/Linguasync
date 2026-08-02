@@ -1,0 +1,431 @@
+.hero{
+    min-height:75vh;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:80px 8%;
+    gap:45px;
+    background:#030712;
+    color:white;
+    overflow:hidden;
+    position:relative;
+}
+
+/* Background Glow */
+
+.hero::before{
+content:"";
+position:absolute;
+width:500px;
+height:500px;
+background:#7C3AED;
+filter:blur(180px);
+opacity:.15;
+top:-180px;
+left:-180px;
+}
+
+.hero::after{
+content:"";
+position:absolute;
+width:500px;
+height:500px;
+background:#06B6D4;
+filter:blur(180px);
+opacity:.12;
+bottom:-200px;
+right:-200px;
+}
+
+/* LEFT */
+
+.hero-left{
+flex:1;
+position:relative;
+z-index:2;
+}
+
+.hero-tag{
+display:inline-block;
+padding:8px 18px;
+border-radius:30px;
+background:rgba(124,92,255,.12);
+border:1px solid rgba(124,92,255,.25);
+color:#8BC8FF;
+font-weight:600;
+margin-bottom:22px;
+font-size:13px;
+}
+
+.hero-left h1{
+font-size:54px;
+line-height:1.15;
+margin-bottom:18px;
+font-weight:800;
+}
+
+.hero-left h1 span{
+background:linear-gradient(90deg,#7c3aed,#06b6d4);
+background-clip:text;
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+color:transparent;
+}
+
+.hero-left p{
+font-size:16px;
+line-height:1.7;
+color:#B7C0D1;
+max-width:560px;
+}
+
+.hero-buttons{
+display:flex;
+gap:16px;
+margin-top:28px;
+margin-bottom:32px;
+}
+
+.primary-btn{
+display:flex;
+align-items:center;
+gap:10px;
+padding:13px 26px;
+border:none;
+border-radius:50px;
+background:linear-gradient(90deg,#7C3AED,#06B6D4);
+color:white;
+cursor:pointer;
+font-size:15px;
+font-weight:600;
+transition:.3s;
+}
+
+.primary-btn:hover{
+transform:translateY(-3px);
+}
+
+.secondary-btn{
+padding:13px 24px;
+border-radius:50px;
+background:rgba(255,255,255,.07);
+border:1px solid rgba(255,255,255,.1);
+color:white;
+cursor:pointer;
+transition:.3s;
+font-size:15px;
+}
+
+.secondary-btn:hover{
+background:rgba(255,255,255,.12);
+}
+
+/* Features */
+
+.hero-features{
+display:grid;
+grid-template-columns:repeat(2,1fr);
+gap:14px;
+}
+
+.hero-features div{
+display:flex;
+align-items:center;
+gap:10px;
+padding:14px;
+background:rgba(255,255,255,.06);
+backdrop-filter:blur(15px);
+border-radius:14px;
+border:1px solid rgba(255,255,255,.08);
+font-weight:500;
+font-size:14px;
+transition:.3s;
+}
+
+.hero-features div:hover{
+transform:translateY(-4px);
+border-color:#7C3AED;
+}
+
+.hero-features svg{
+font-size:18px;
+color:#06B6D4;
+}
+
+/* RIGHT */
+
+.hero-right{
+flex:1;
+display:flex;
+justify-content:center;
+align-items:center;
+position:relative;
+z-index:2;
+}
+
+.mockup{
+position:relative;
+width:390px;
+height:490px;
+}
+
+.video-card{
+width:100%;
+background:rgba(17,24,39,.92);
+backdrop-filter:blur(18px);
+border:1px solid rgba(255,255,255,.08);
+border-radius:24px;
+padding:22px;
+box-shadow:0 16px 45px rgba(0,0,0,.40);
+}
+/* ============================= */
+/* HEADER */
+/* ============================= */
+
+.meeting-header{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:18px;
+    padding-bottom:14px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.live-dot{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:#22c55e;
+    animation:pulse 1.5s infinite;
+}
+
+.meeting-header span{
+    color:white;
+    font-weight:600;
+    font-size:14px;
+}
+
+/* ============================= */
+/* SPEAKER */
+/* ============================= */
+
+.speaker{
+    margin-bottom:18px;
+}
+
+.speaker h3{
+    font-size:20px;
+    margin-bottom:4px;
+}
+
+.speaker small{
+    color:#9ca3af;
+    font-size:12px;
+}
+
+/* ============================= */
+/* SPEECH BOX */
+/* ============================= */
+
+.speech-box{
+    background:#1e293b;
+    border-left:4px solid #7C3AED;
+    padding:14px;
+    border-radius:12px;
+    margin-bottom:16px;
+}
+
+.speech-box h4{
+    color:#8BC8FF;
+    margin-bottom:8px;
+    font-size:15px;
+}
+
+.speech-box p{
+    color:#d1d5db;
+    line-height:1.6;
+    font-size:13px;
+}
+
+/* ============================= */
+/* PROCESS */
+/* ============================= */
+
+.process-flow{
+    text-align:center;
+    color:#06B6D4;
+    font-weight:600;
+    line-height:1.8;
+    margin:14px 0;
+    font-size:13px;
+}
+
+/* ============================= */
+/* TRANSLATION */
+/* ============================= */
+
+.translation-box{
+    background:#10263d;
+    border-left:4px solid #06B6D4;
+    padding:14px;
+    border-radius:12px;
+}
+
+.translation-box h4{
+    color:#8BC8FF;
+    margin-bottom:8px;
+    font-size:15px;
+}
+
+.translation-box p{
+    color:#e5e7eb;
+    line-height:1.6;
+    font-size:13px;
+}
+
+/* ============================= */
+/* FLOATING CARDS */
+/* ============================= */
+
+.floating-card{
+    position:absolute;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);
+    backdrop-filter:blur(18px);
+    color:white;
+    padding:10px 14px;
+    border-radius:14px;
+    font-size:12px;
+    font-weight:600;
+    box-shadow:0 10px 25px rgba(0,0,0,.25);
+}
+
+.card1{
+    top:-12px;
+    left:-40px;
+}
+
+.card2{
+    top:70px;
+    right:-45px;
+}
+
+.card3{
+    left:-50px;
+    bottom:90px;
+}
+
+.card4{
+    right:-35px;
+    bottom:-12px;
+}
+
+/* ============================= */
+/* ANIMATION */
+/* ============================= */
+
+@keyframes pulse{
+
+0%{
+transform:scale(1);
+opacity:1;
+}
+
+50%{
+transform:scale(1.35);
+opacity:.5;
+}
+
+100%{
+transform:scale(1);
+opacity:1;
+}
+
+}
+
+/* ============================= */
+/* RESPONSIVE */
+/* ============================= */
+
+@media(max-width:1100px){
+
+.hero{
+    flex-direction:column;
+    text-align:center;
+    padding:90px 7%;
+    min-height:auto;
+}
+
+.hero-left h1{
+    font-size:42px;
+}
+
+.hero-left p{
+    margin:auto;
+}
+
+.hero-buttons{
+    justify-content:center;
+}
+
+.hero-features{
+    grid-template-columns:1fr;
+}
+
+.mockup{
+    width:360px;
+    height:auto;
+}
+
+.card1,
+.card2,
+.card3,
+.card4{
+    display:none;
+}
+
+}
+
+@media(max-width:768px){
+
+.hero{
+    padding:80px 20px 50px;
+    gap:35px;
+}
+
+.hero-left h1{
+    font-size:34px;
+}
+
+.hero-left p{
+    font-size:15px;
+}
+
+.hero-buttons{
+    flex-direction:column;
+}
+
+.primary-btn,
+.secondary-btn{
+    width:100%;
+    justify-content:center;
+}
+
+.video-card{
+    padding:18px;
+}
+
+.speaker h3{
+    font-size:18px;
+}
+
+.hero-features{
+    grid-template-columns:1fr;
+}
+
+.mockup{
+    width:100%;
+    max-width:320px;
+}
+
+}

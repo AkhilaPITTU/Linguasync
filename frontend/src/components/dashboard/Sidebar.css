@@ -1,0 +1,306 @@
+/* =======================================
+SIDEBAR
+======================================= */
+
+.sidebar{
+
+    width:290px;
+
+    background:#0D1526;
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:space-between;
+
+    padding:25px;
+
+    border-right:1px solid rgba(255,255,255,.05);
+
+}
+
+/* ======================================= */
+
+.logo{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    margin-bottom:45px;
+
+}
+
+.logo-circle{
+
+    width:60px;
+
+    height:60px;
+
+    border-radius:18px;
+
+    background:linear-gradient(
+        135deg,
+        #7C3AED,
+        #2563EB
+    );
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-size:28px;
+
+}
+
+.logo h2{
+
+    color:white;
+
+    font-size:22px;
+
+}
+
+.logo p{
+
+    color:#94A3B8;
+
+    font-size:13px;
+
+}
+
+/* ======================================= */
+
+nav{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:10px;
+
+}
+
+/* ======================================= */
+
+.menu{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    padding:15px 18px;
+
+    text-decoration:none;
+
+    color:#CBD5E1;
+
+    border-radius:16px;
+
+    transition:.35s;
+
+}
+
+.menu:hover{
+
+    background:#17233B;
+
+    color:white;
+
+}
+
+.active{
+
+    background:linear-gradient(
+        90deg,
+        #7C3AED,
+        #5B21B6
+    );
+
+    color:white;
+
+}
+
+.menu-icon{
+
+    font-size:20px;
+
+}
+
+/* ======================================= */
+
+.premium-box{
+
+    margin-top:30px;
+
+    background:linear-gradient(
+        135deg,
+        #1E293B,
+        #312E81
+    );
+
+    padding:22px;
+
+    border-radius:22px;
+
+}
+
+.premium-box h3{
+
+    color:white;
+
+    margin-bottom:12px;
+
+}
+
+.premium-box p{
+
+    color:#CBD5E1;
+
+    font-size:14px;
+
+    line-height:1.6;
+
+    margin-bottom:20px;
+
+}
+
+.premium-box button{
+
+    width:100%;
+
+    border:none;
+
+    padding:14px;
+
+    border-radius:14px;
+
+    background:#7C3AED;
+
+    color:white;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:8px;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+}
+
+.premium-box button:hover{
+
+    background:#6D28D9;
+
+}
+
+/* ======================================= */
+
+.logout{
+
+    width:100%;
+
+    margin-top:18px;
+
+    padding:15px;
+
+    border:none;
+
+    border-radius:16px;
+
+    background:#EF4444;
+
+    color:white;
+
+    cursor:pointer;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:10px;
+
+    transition:.3s;
+
+}
+
+.logout:hover{
+
+    background:#DC2626;
+
+}
+
+/* =======================================
+RESPONSIVE
+======================================= */
+
+@media(max-width:1200px){
+
+.sidebar{
+
+width:95px;
+
+padding:18px;
+
+}
+
+.logo h2,
+.logo p,
+.menu-title,
+.premium-box{
+
+display:none;
+
+}
+
+.logo{
+
+justify-content:center;
+
+}
+
+.menu{
+
+justify-content:center;
+
+padding:16px;
+
+}
+
+.logout{
+
+font-size:0;
+
+}
+
+.logout svg{
+
+font-size:22px;
+
+}
+
+}
+
+@media(max-width:768px){
+
+.sidebar{
+
+display:none;
+
+}
+
+}

@@ -1,0 +1,165 @@
+/* ==========================================
+EXPORTED CHATS
+========================================== */
+
+.exported-chats{
+
+    width:100%;
+
+}
+
+/* ========================================== */
+
+.export-card{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    background:#18253D;
+
+    border-radius:18px;
+
+    padding:18px;
+
+    margin-bottom:18px;
+
+    transition:.35s;
+
+}
+
+.export-card:hover{
+
+    transform:translateY(-5px);
+
+    box-shadow:0 15px 30px rgba(124,58,237,.18);
+
+}
+
+/* ========================================== */
+
+.export-left{
+
+    display:flex;
+
+    gap:15px;
+
+    align-items:center;
+
+}
+
+.file-icon{
+
+    width:60px;
+
+    height:60px;
+
+    border-radius:16px;
+
+    background:#7C3AED;
+
+    color:white;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-size:26px;
+
+}
+
+/* ========================================== */
+
+.export-left h3{
+
+    color:white;
+
+    margin-bottom:6px;
+
+    font-size:16px;
+
+}
+
+.export-left p{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    color:#CBD5E1;
+
+    font-size:14px;
+
+}
+
+.export-left small{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:6px;
+
+    color:#94A3B8;
+
+    margin-top:6px;
+
+}
+
+/* ========================================== */
+
+.export-card button{
+
+    width:46px;
+
+    height:46px;
+
+    border:none;
+
+    border-radius:14px;
+
+    background:#2563EB;
+
+    color:white;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+    font-size:18px;
+
+}
+
+.export-card button:hover{
+
+    background:#7C3AED;
+
+}
+
+/* ========================================== */
+
+@media(max-width:768px){
+
+.export-card{
+
+flex-direction:column;
+
+align-items:flex-start;
+
+gap:18px;
+
+}
+
+.export-card button{
+
+width:100%;
+
+}
+
+}

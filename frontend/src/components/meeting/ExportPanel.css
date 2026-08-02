@@ -1,0 +1,101 @@
+.export-panel{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:22px;
+
+    height:100%;
+}
+
+.export-panel h3{
+
+    color:white;
+
+    font-size:22px;
+}
+
+.export-description{
+
+    color:#b5b5b5;
+
+    font-size:14px;
+
+    line-height:1.5;
+}
+
+.export-options{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:18px;
+}
+
+.export-card{
+
+    background:#1b2130;
+
+    border:1px solid rgba(255,255,255,.05);
+
+    border-radius:16px;
+
+    padding:18px;
+
+    transition:.3s;
+}
+
+.export-card:hover{
+
+    background:#242d43;
+}
+
+.export-card h4{
+
+    color:white;
+
+    margin-bottom:8px;
+
+    font-size:18px;
+}
+
+.export-card p{
+
+    color:#b8b8b8;
+
+    font-size:14px;
+
+    line-height:1.5;
+
+    margin-bottom:16px;
+}
+
+.export-card button{
+
+    width:100%;
+
+    padding:12px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#6C4DFF;
+
+    color:white;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    cursor:pointer;
+
+    transition:.3s;
+}
+
+.export-card button:hover{
+
+    background:#7b60ff;
+}

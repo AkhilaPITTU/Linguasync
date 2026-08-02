@@ -1,0 +1,179 @@
+/* ==========================================
+TRANSLATION HISTORY
+========================================== */
+
+.translation-history{
+
+    width:100%;
+
+}
+
+/* ========================================== */
+
+.translation-card{
+
+    background:#18253D;
+
+    border-radius:18px;
+
+    padding:18px;
+
+    margin-bottom:18px;
+
+    transition:.35s;
+
+    border:1px solid rgba(255,255,255,.05);
+
+}
+
+.translation-card:hover{
+
+    transform:translateY(-5px);
+
+    box-shadow:0 15px 30px rgba(37,99,235,.18);
+
+}
+
+/* ========================================== */
+
+.translation-top{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:18px;
+
+}
+
+.language-box{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+    color:#06B6D4;
+
+}
+
+.language-box strong{
+
+    color:white;
+
+}
+
+/* ========================================== */
+
+.mode{
+
+    background:#7C3AED;
+
+    color:white;
+
+    padding:6px 12px;
+
+    border-radius:20px;
+
+    font-size:12px;
+
+}
+
+/* ========================================== */
+
+.translation-middle{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    margin-bottom:18px;
+
+}
+
+.translation-middle small{
+
+    color:#94A3B8;
+
+}
+
+.translation-middle p{
+
+    color:white;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:6px;
+
+    margin-top:6px;
+
+}
+
+/* ========================================== */
+
+.translation-buttons{
+
+    display:flex;
+
+    gap:12px;
+
+}
+
+.translation-buttons button{
+
+    flex:1;
+
+    border:none;
+
+    border-radius:12px;
+
+    padding:12px;
+
+    background:#111C2F;
+
+    color:white;
+
+    cursor:pointer;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:8px;
+
+    transition:.3s;
+
+}
+
+.translation-buttons button:hover{
+
+    background:#2563EB;
+
+}
+
+/* ========================================== */
+
+@media(max-width:768px){
+
+.translation-middle{
+
+flex-direction:column;
+
+gap:15px;
+
+}
+
+.translation-buttons{
+
+flex-direction:column;
+
+}
+
+}
