@@ -1,7 +1,6 @@
 import "./ActiveCommunication.css";
-
 import { useEffect, useState } from "react";
-
+import { useNavigate } from "react-router-dom";
 import { getActiveMeeting } from "../../services/meetingService";
 
 import {
@@ -11,6 +10,7 @@ import {
     FiUsers,
     FiClock,
     FiGlobe,
+    FiVolume2,
 } from "react-icons/fi";
 
 function ActiveCommunication() {
@@ -18,6 +18,7 @@ function ActiveCommunication() {
     const [activeCall, setActiveCall] = useState(null);
 
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
 
@@ -37,17 +38,13 @@ function ActiveCommunication() {
 
                 }
 
-            }
-
-            catch (error) {
+            } catch (error) {
 
                 console.error("Active Meeting Error:", error);
 
                 setActiveCall(null);
 
-            }
-
-            finally {
+            } finally {
 
                 setLoading(false);
 
@@ -58,7 +55,10 @@ function ActiveCommunication() {
         fetchActiveMeeting();
 
     }, []);
-
+    const openMeeting = () => {
+        if (!activeCall) return;
+        navigate(`/meeting/${activeCall.meeting_id}`);
+    };
     // ==========================
     // Loading
     // ==========================
@@ -100,11 +100,8 @@ function ActiveCommunication() {
                 <div className="participant">
 
                     <img
-
                         src="/images/user.png"
-
                         alt="User"
-
                     />
 
                     <div>
@@ -122,6 +119,24 @@ function ActiveCommunication() {
         );
 
     }
+
+    // ==========================
+    // Output Mode Text
+    // ==========================
+
+    const outputMode = {
+
+        original: "Original Voice",
+
+        text: "Translated Text",
+
+        speech: "Translated Speech",
+
+        translated_speech: "Translated Speech",
+
+        text_speech: "Text + Speech",
+
+    };
 
     return (
 
@@ -152,24 +167,21 @@ function ActiveCommunication() {
             <div className="participant">
 
                 <img
-
                     src="/images/user.png"
-
                     alt="User"
-
                 />
 
                 <div>
 
                     <h3>
 
-                        {activeCall.host_name}
+                        {activeCall.host_name || "Meeting Host"}
 
                     </h3>
 
                     <p>
 
-                        Meeting Host
+                        Host ID : {activeCall.host_id}
 
                     </p>
 
@@ -177,7 +189,7 @@ function ActiveCommunication() {
 
             </div>
 
-            {/* Information */}
+            {/* Meeting Information */}
 
             <div className="communication-info">
 
@@ -213,6 +225,8 @@ function ActiveCommunication() {
 
                         <FiUsers />
 
+                        {" "}
+
                         {activeCall.participants}
 
                     </strong>
@@ -223,7 +237,7 @@ function ActiveCommunication() {
 
                     <span>
 
-                        Languages
+                        Language
 
                     </span>
 
@@ -231,9 +245,29 @@ function ActiveCommunication() {
 
                         {activeCall.source_language}
 
-                        →
+                        {" → "}
 
-                        {activeCall.target_language}
+                        {activeCall.preferred_language}
+
+                    </strong>
+
+                </div>
+
+                <div>
+
+                    <span>
+
+                        Output
+
+                    </span>
+
+                    <strong>
+
+                        <FiVolume2 />
+
+                        {" "}
+
+                        {outputMode[activeCall.output_mode] || activeCall.output_mode}
 
                     </strong>
 
@@ -250,6 +284,8 @@ function ActiveCommunication() {
                     <strong className="running">
 
                         <FiGlobe />
+
+                        {" "}
 
                         {activeCall.translation_status}
 
@@ -269,6 +305,8 @@ function ActiveCommunication() {
 
                         <FiMic />
 
+                        {" "}
+
                         {activeCall.microphone_status}
 
                     </strong>
@@ -286,6 +324,8 @@ function ActiveCommunication() {
                     <strong>
 
                         <FiVideo />
+
+                        {" "}
 
                         {activeCall.camera_status}
 
@@ -329,15 +369,16 @@ function ActiveCommunication() {
 
             </div>
 
-            {/* Button */}
+            {/* Join Button */}
 
-            <button className="join-button">
+            <button className="join-button" onClick={openMeeting}
+>
 
-                <FiPhone />
+    <FiPhone />
 
-                Open Call
+    Open Call
 
-            </button>
+</button>
 
         </div>
 

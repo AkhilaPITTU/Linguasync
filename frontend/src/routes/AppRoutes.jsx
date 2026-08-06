@@ -1,4 +1,8 @@
-import { Routes, Route } from "react-router-dom";
+import {
+    Routes,
+    Route,
+    Navigate
+} from "react-router-dom";
 
 import Landing from "../pages/Landing";
 import Login from "../pages/Login";
@@ -10,11 +14,31 @@ import CreateMeeting from "../pages/CreateMeeting";
 import MeetingRoom from "../pages/MeetingRoom";
 import AddParticipants from "../pages/AddParticipants";
 
+
+// ==========================================
+// Protected Route
+// ==========================================
+
+function ProtectedRoute({ children }) {
+
+    const token = localStorage.getItem(
+        "access_token"
+    );
+
+    return token
+        ? children
+        : <Navigate to="/login" replace />;
+
+}
+
+
 function AppRoutes() {
 
     return (
 
         <Routes>
+
+            {/* Public Routes */}
 
             <Route
                 path="/"
@@ -32,11 +56,6 @@ function AppRoutes() {
             />
 
             <Route
-                path="/dashboard"
-                element={<Dashboard />}
-            />
-
-            <Route
                 path="/forgot-password"
                 element={<ForgotPassword />}
             />
@@ -46,19 +65,50 @@ function AppRoutes() {
                 element={<ResetPassword />}
             />
 
+
+            {/* Protected Routes */}
+
+            <Route
+                path="/dashboard"
+                element={
+                    <ProtectedRoute>
+                        <Dashboard />
+                    </ProtectedRoute>
+                }
+            />
+
             <Route
                 path="/create-meeting"
-                element={<CreateMeeting />}
+                element={
+                    <ProtectedRoute>
+                        <CreateMeeting />
+                    </ProtectedRoute>
+                }
             />
 
             <Route
                 path="/meeting/:meetingId"
-                element={<MeetingRoom />}
+                element={
+                    <ProtectedRoute>
+                        <MeetingRoom />
+                    </ProtectedRoute>
+                }
             />
 
             <Route
                 path="/meeting/:meetingId/participants"
-                element={<AddParticipants />}
+                element={
+                    <ProtectedRoute>
+                        <AddParticipants />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Unknown Route */}
+
+            <Route
+                path="*"
+                element={<Navigate to="/" replace />}
             />
 
         </Routes>

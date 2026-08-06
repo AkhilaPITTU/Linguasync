@@ -3,11 +3,18 @@ from bson import ObjectId
 from app.config.database import meetings_collection, users_collection
 
 
-async def recent_calls_service():
+async def recent_calls_service(user_id: str):
 
     meetings = (
         await meetings_collection
-        .find({})
+        .find(
+            {
+                "$or": [
+                    {"host_id": user_id},
+                    {"participants.user_id": user_id}
+                ]
+            }
+        )
         .sort("started_at", -1)
         .limit(5)
         .to_list(length=5)
@@ -35,10 +42,21 @@ async def recent_calls_service():
 
         meeting_type = meeting.get("meeting_type", "video")
 
-        mode = "Video" if meeting_type.lower() == "video" else "Audio"
+        mode = (
+            "Video"
+            if meeting_type.lower() == "video"
+            else "Audio"
+        )
 
-        source_language = meeting.get("source_language", "English")
-        target_language = meeting.get("target_language", "Telugu")
+        source_language = meeting.get(
+            "source_language",
+            "Detecting..."
+        )
+
+        target_language = meeting.get(
+            "preferred_language",
+            meeting.get("target_language", "English")
+        )
 
         language = f"{source_language} → {target_language}"
 
@@ -49,7 +67,9 @@ async def recent_calls_service():
 
         if started_at and ended_at:
 
-            seconds = int((ended_at - started_at).total_seconds())
+            seconds = int(
+                (ended_at - started_at).total_seconds()
+            )
 
             hours = seconds // 3600
             minutes = (seconds % 3600) // 60
@@ -60,7 +80,9 @@ async def recent_calls_service():
                 duration = f"{minutes} min"
 
         if started_at:
-            time = started_at.strftime("%d %b %Y %I:%M %p")
+            time = started_at.strftime(
+                "%d %b %Y %I:%M %p"
+            )
         else:
             time = "-"
 

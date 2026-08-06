@@ -1,4 +1,6 @@
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Header, status
+
+from app.config.security import get_user_id
 
 from app.schemas.meeting_schema import (
     CreateMeetingSchema,
@@ -31,7 +33,8 @@ async def create_meeting_controller(
         result = await create_meeting(
             host_id=host_id,
             meeting_type=data.meeting_type,
-            target_language=data.target_language
+            preferred_language=data.preferred_language,
+            output_mode=data.output_mode
         )
 
         if not result["success"]:
@@ -235,11 +238,31 @@ async def get_participants_controller(
 # GET ACTIVE MEETING
 # ==========================================
 
-async def get_active_meeting_controller():
+async def get_active_meeting_controller(
+    authorization: str = Header(...)
+):
 
     try:
 
-        result = await get_active_meeting()
+        if not authorization.startswith("Bearer "):
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Authorization Header"
+            )
+
+        token = authorization.split(" ")[1]
+
+        user_id = get_user_id(token)
+
+        if not user_id:
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or Expired Token"
+            )
+
+        result = await get_active_meeting(user_id)
 
         if not result["success"]:
 

@@ -1,55 +1,348 @@
-.create-meeting-page{
+/* ===========================
+   CREATE MEETING PAGE
+=========================== */
 
-    height:100vh;
+.create-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f172a, #111827);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    font-family: "Poppins", sans-serif;
+}
 
-    display:flex;
+.create-card {
+    width: 100%;
+    max-width: 500px;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(18px);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 22px;
+    color: white;
+    box-shadow: 0 15px 35px rgba(0,0,0,.4);
+    animation: fadeUp .4s ease;
+}
 
-    justify-content:center;
+/* ===========================
+   HEADINGS
+=========================== */
 
-    align-items:center;
+.create-card h1 {
+    text-align: center;
+    font-size: 26px;
+    margin-bottom: 6px;
+}
 
-    background:#0f172a;
+.subtitle {
+    text-align: center;
+    color: #cbd5e1;
+    font-size: 14px;
+    margin-bottom: 18px;
+}
+
+.section-title {
+    margin-bottom: 15px;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+/* ===========================
+   MEETING TYPE CARDS
+=========================== */
+
+.meeting-options {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.meeting-box {
+    flex: 1;
+    background: rgba(255,255,255,.05);
+    border: 2px solid transparent;
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: .3s;
+}
+
+.meeting-box:hover {
+    transform: translateY(-4px);
+    background: rgba(255,255,255,.09);
+}
+
+.meeting-box.active {
+    border-color: #3b82f6;
+    background: rgba(59,130,246,.18);
+    box-shadow: 0 0 12px rgba(59,130,246,.4);
+}
+
+.meeting-icon {
+    font-size: 34px;
+    margin-bottom: 8px;
+}
+
+.meeting-box h3 {
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+.meeting-box p {
+    font-size: 13px;
+    color: #d1d5db;
+    line-height: 1.4;
+}
+
+/* ===========================
+   FORM
+=========================== */
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    outline: none;
+    border-radius: 10px;
+    background: rgba(255,255,255,.08);
+    color: white;
+    font-size: 15px;
+    transition: .3s;
+}
+
+.form-group select:focus {
+    border: 1px solid #3b82f6;
+}
+
+.form-group option {
+    background: #1f2937;
+    color: white;
+}
+/* ===========================
+   OUTPUT MODE CARDS
+=========================== */
+
+.mode-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mode-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: rgba(255,255,255,.05);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all .3s ease;
+}
+
+.mode-card:hover {
+    background: rgba(255,255,255,.10);
+    transform: translateY(-2px);
+}
+
+.mode-card.active {
+    border-color: #22c55e;
+    background: rgba(34,197,94,.15);
+    box-shadow: 0 0 12px rgba(34,197,94,.35);
+}
+
+.mode-icon {
+    font-size: 28px;
+    width: 40px;
+    text-align: center;
+}
+
+.mode-card h4 {
+    margin: 0;
+    font-size: 15px;
+    color: #ffffff;
+}
+
+.mode-card p {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+/* ===========================
+   BUTTON
+=========================== */
+
+.create-btn {
+    width: 100%;
+    margin-top: 18px;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(90deg,#2563eb,#7c3aed);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .3s ease;
+}
+
+.create-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(59,130,246,.35);
+}
+
+.create-btn:disabled {
+    opacity: .6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ===========================
+   ANIMATIONS
+=========================== */
+
+@keyframes fadeUp {
+
+    from {
+
+        opacity: 0;
+        transform: translateY(20px);
+
+    }
+
+    to {
+
+        opacity: 1;
+        transform: translateY(0);
+
+    }
 
 }
 
-.create-card{
+/* ===========================
+   SCROLLBAR
+=========================== */
 
-    width:450px;
+::-webkit-scrollbar {
+    width: 6px;
+}
 
-    background:#1e293b;
+::-webkit-scrollbar-thumb {
+    background: #4f46e5;
+    border-radius: 10px;
+}
 
-    padding:30px;
+::-webkit-scrollbar-track {
+    background: transparent;
+}
 
-    border-radius:15px;
+/* ===========================
+   RESPONSIVE
+=========================== */
 
-    display:flex;
+@media (max-width:768px){
 
-    flex-direction:column;
+    .create-card{
 
-    gap:20px;
+        max-width:95%;
+        padding:18px;
 
-    color:white;
+    }
+
+    .meeting-options{
+
+        flex-direction:column;
+
+    }
+
+    .meeting-box{
+
+        width:100%;
+
+    }
+
+    .meeting-icon{
+
+        font-size:30px;
+
+    }
+
+    .meeting-box h3{
+
+        font-size:17px;
+
+    }
+
+    .mode-card{
+
+        padding:10px;
+
+    }
+
+    .mode-icon{
+
+        font-size:24px;
+
+    }
+
+    .create-btn{
+
+        font-size:15px;
+
+    }
 
 }
 
-.create-card select{
+@media (max-width:480px){
 
-    padding:12px;
+    .create-card{
 
-    border-radius:8px;
+        padding:16px;
 
-}
+    }
 
-.create-card button{
+    .create-card h1{
 
-    padding:14px;
+        font-size:22px;
 
-    border:none;
+    }
 
-    border-radius:8px;
+    .subtitle{
 
-    cursor:pointer;
+        font-size:13px;
 
-    font-size:16px;
+    }
+
+    .meeting-box p{
+
+        font-size:12px;
+
+    }
+
+    .mode-card h4{
+
+        font-size:14px;
+
+    }
+
+    .mode-card p{
+
+        font-size:11px;
+
+    }
 
 }

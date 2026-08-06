@@ -12,7 +12,15 @@ class CreateMeetingSchema(BaseModel):
 
     meeting_type: Literal["video", "audio"]
 
-    target_language: str
+    preferred_language: str
+
+    output_mode: Literal[
+        "original",
+        "text",
+        "speech",
+        "text_speech",
+        "translated_speech"
+    ]
 
 
 # ==========================================
@@ -78,7 +86,9 @@ class MeetingResponseSchema(BaseModel):
 
     source_language: str
 
-    target_language: str
+    preferred_language: str
+
+    output_mode: str
 
     translation_status: str
 

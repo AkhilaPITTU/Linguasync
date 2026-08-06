@@ -8,7 +8,16 @@ export const getExportedChats = async () => {
 
     try {
 
-        const response = await API.get("/dashboard/exported-chats");
+        const token = localStorage.getItem("access_token");
+
+        const response = await API.get(
+            "/dashboard/exported-chats",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            }
+        );
 
         if (response.data.success) {
 

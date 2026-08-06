@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
+
 from app.controllers.recent_activity_controller import get_recent_activity
 
 router = APIRouter(
@@ -6,4 +7,16 @@ router = APIRouter(
     tags=["Recent Activity"]
 )
 
-router.get("/recent-activity")(get_recent_activity)
+
+@router.get("/recent-activity")
+async def recent_activity(
+
+    authorization: str = Header(...)
+
+):
+
+    return await get_recent_activity(
+
+        authorization=authorization
+
+    )

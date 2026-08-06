@@ -6,13 +6,20 @@ from app.config.database import (
 )
 
 
-async def recent_activity_service():
+async def recent_activity_service(user_id: str):
 
     activities = []
 
     meetings = (
         await meetings_collection
-        .find({})
+        .find(
+            {
+                "$or": [
+                    {"host_id": user_id},
+                    {"participants.user_id": user_id}
+                ]
+            }
+        )
         .sort("started_at", -1)
         .limit(3)
         .to_list(length=3)
@@ -36,14 +43,17 @@ async def recent_activity_service():
 
             "status": meeting.get("status", "Completed"),
 
-            # Keep datetime only for sorting
             "_timestamp": meeting_time or datetime.min
 
         })
 
     translations = (
         await translations_collection
-        .find({})
+        .find(
+            {
+                "user_id": user_id
+            }
+        )
         .sort("created_at", -1)
         .limit(2)
         .to_list(length=2)
@@ -66,18 +76,15 @@ async def recent_activity_service():
 
             "status": "Success",
 
-            # Keep datetime only for sorting
             "_timestamp": translation_time or datetime.min
 
         })
 
-    # Sort using datetime
     activities.sort(
         key=lambda activity: activity["_timestamp"],
         reverse=True
     )
 
-    # Convert datetime to string after sorting
     for activity in activities:
 
         if activity["_timestamp"] != datetime.min:

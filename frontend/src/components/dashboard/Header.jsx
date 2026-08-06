@@ -17,20 +17,25 @@ function Header() {
 
     const [currentTime, setCurrentTime] = useState(new Date());
 
+    const [user, setUser] = useState({});
+
     useEffect(() => {
 
         const timer = setInterval(() => {
-
             setCurrentTime(new Date());
+        }, 1000);
 
-        },1000);
+        const storedUser = JSON.parse(
+            localStorage.getItem("user")
+        );
+
+        if (storedUser) {
+            setUser(storedUser);
+        }
 
         return () => clearInterval(timer);
 
-    },[]);
-
-    const user =
-        JSON.parse(localStorage.getItem("user")) || {};
+    }, []);
 
     return (
 
@@ -43,11 +48,8 @@ function Header() {
                 <FiSearch />
 
                 <input
-
                     type="text"
-
                     placeholder="Search calls, translations, contacts..."
-
                 />
 
             </div>
@@ -82,7 +84,7 @@ function Header() {
 
                 </div>
 
-                {/* Notification */}
+                {/* Notifications */}
 
                 <button className="icon-button">
 
@@ -95,25 +97,14 @@ function Header() {
                 {/* Theme */}
 
                 <button
-
                     className="icon-button"
-
                     onClick={() => setDarkMode(!darkMode)}
-
                 >
 
                     {
-
                         darkMode
-
-                        ?
-
-                        <FiSun />
-
-                        :
-
-                        <FiMoon />
-
+                            ? <FiSun />
+                            : <FiMoon />
                     }
 
                 </button>
@@ -123,24 +114,30 @@ function Header() {
                 <div className="profile-box">
 
                     <img
-
                         src="/images/user.png"
-
                         alt="Profile"
-
                     />
 
                     <div>
 
                         <h4>
 
-                            {user.full_name || "AN Reddy"}
+                            {
+                                user.name ||
+                                user.full_name ||
+                                localStorage.getItem("user_name") ||
+                                "User"
+                            }
 
                         </h4>
 
                         <span>
 
-                            Premium User
+                            {
+                                user.role ||
+                                localStorage.getItem("user_role") ||
+                                "User"
+                            }
 
                         </span>
 
