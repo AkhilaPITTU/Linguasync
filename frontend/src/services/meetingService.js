@@ -136,3 +136,33 @@ export const endMeeting = async (meetingId) => {
     return response.data;
 
 };
+// ===========================
+// Join Meeting
+// ===========================
+
+export const joinMeeting = async (meetingId, userName, language) => {
+
+    const token = localStorage.getItem("access_token");
+    const userId = localStorage.getItem("user_id");
+
+    const response = await API.post(
+
+        `/api/meeting/join?user_id=${userId}`,
+
+        {
+            meeting_id: meetingId,
+            user_name: userName,
+            language: language
+        },
+
+        {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        }
+
+    );
+
+    return response.data;
+
+};

@@ -20,6 +20,11 @@ class WebSocketService {
             this.socket.onopen = () => {
 
                 console.log("✅ WebSocket Connected");
+                this.send({
+                    type: "join",
+                    meeting_id: meetingId,
+                    user_id: userId
+            });
 
                 resolve();
 
@@ -29,7 +34,7 @@ class WebSocketService {
 
                 const data = JSON.parse(event.data);
 
-                console.log(data);
+                console.log("📨 WS:", data.type, data);
 
                 if (onMessage) {
                     onMessage(data);

@@ -94,6 +94,24 @@ async def join_meeting(
     user_name: str,
     language: str
 ):
+    print("\n========== JOIN MEETING ==========")
+    print("Meeting ID:", meeting_id)
+    print("User ID:", user_id)
+
+    meeting = await meetings_collection.find_one(
+        {
+            "meeting_id": meeting_id,
+            "status": "active"
+        }
+    )
+
+    print("Meeting Found:", meeting)
+
+    if not meeting:
+        return {
+            "success": False,
+            "message": "Meeting not found."
+        }
 
     meeting = await meetings_collection.find_one(
         {

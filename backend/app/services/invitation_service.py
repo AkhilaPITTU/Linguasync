@@ -130,6 +130,9 @@ async def pending_invitations_service(user_id: str):
         host = await users_collection.find_one({
             "_id": ObjectId(invite["host_id"])
         })
+        meeting = await meetings_collection.find_one({
+        "meeting_id": invite["meeting_id"]
+    })
 
         invitations.append({
             "invitation_id": str(invite["_id"]),
@@ -137,6 +140,9 @@ async def pending_invitations_service(user_id: str):
             "host_id": invite["host_id"],
             "host_name": host.get("full_name") if host else "",
             "host_email": host.get("email") if host else "",
+            "meeting_type": meeting.get("meeting_type") if meeting else "video",
+            "preferred_language": meeting.get("preferred_language") if meeting else "English",
+            "output_mode": meeting.get("output_mode") if meeting else "original",
             "status": invite["status"],
             "created_at": invite["created_at"]
         })
@@ -169,16 +175,30 @@ async def accept_invitation_service(invitation_id: str):
             "message": "Invitation not found."
         }
 
+    host_user = await users_collection.find_one(
+    {
+        "_id": ObjectId(invite["invited_user_id"])
+    }
+)
+    participant = {
+        "user_id": invite["invited_user_id"],
+        "user_name": host_user.get("full_name", ""),
+        "language": "English",
+        "mic_enabled": True,
+        "camera_enabled": True,
+        "screen_share": False,
+        "speaking": False
+        }
     await meetings_collection.update_one(
         {
-            "_id": ObjectId(invite["meeting_id"])
-        },
-        {
-            "$addToSet": {
-                "participants": invite["invited_user_id"]
-            }
+            "meeting_id": invite["meeting_id"]
+    },
+    {
+        "$addToSet": {
+            "participants": participant
         }
-    )
+    }
+)
 
     await invitations_collection.update_one(
         {
@@ -225,5 +245,6 @@ async def reject_invitation_service(invitation_id: str):
 
     return {
         "success": True,
-        "message": "Invitation rejected."
+        "message": "Invitation accepted.",
+        "meeting_id": invite["meeting_id"]
     }

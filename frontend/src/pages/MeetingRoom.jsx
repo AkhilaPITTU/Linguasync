@@ -1,236 +1,450 @@
 import "./MeetingRoom.css";
-
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-
+import { joinMeeting } from "../services/meetingService";
 import VideoGrid from "../components/meeting/VideoGrid";
 import RightSidebar from "../components/meeting/RightSidebar";
 import BottomControls from "../components/meeting/BottomControls";
 import ShowUIButton from "../components/meeting/ShowUIButton";
-
 import websocketService from "../services/websocketService";
 import webrtcService from "../services/webrtcService";
 import audioService from "../services/audioService";
 
 const MeetingRoom = () => {
 
-    const { meetingId } = useParams();
+const { meetingId } = useParams();
 
-    const userId = localStorage.getItem("user_id");
-    const userName = localStorage.getItem("user_name");
+const userId = localStorage.getItem("user_id");
+const userName = localStorage.getItem("user_name");
 
-    const [participants, setParticipants] = useState([]);
-    const [chatMessages, setChatMessages] = useState([]);
-    const [transcript, setTranscript] = useState([]);
-    const [translations, setTranslations] = useState([]);
-    const [language, setLanguage] = useState("English");
-    // const { meetingId } = useParams();
-    // const currentMeetingId = meetingId || "test-meeting";
+const [participants,setParticipants] = useState([]);
+const [chatMessages,setChatMessages] = useState([]);
+const [transcript,setTranscript] = useState([]);
+const [translations,setTranslations] = useState([]);
+const [language,setLanguage] = useState("English");
 
-    useEffect(() => {
+useEffect(() => {
 
-        if (!userId) {
-            console.error("User ID is missing.");
-            return;
-        }
+if (!userId) return;
 
-        const initializeMeeting = async () => {
+const initializeMeeting = async () => {
 
-            try {
+try {
 
-                const stream =
-                    await webrtcService.startLocalStream();
+const stream =
+await webrtcService.startLocalStream();
 
-                setParticipants([
-                    {
-                        id: userId,
-                        name: userName,
-                        stream,
-                        local: true,
-                        language,
-                        mic: true,
-                        camera: true,
-                        speaking: false,
-                    },
-                ]);
-                await websocketService.connect(
-                    meetingId,
-                    userId,
-                    async (data) => {
-                        switch (data.type) {
-                            case "user_joined":
-                                if (data.user_id !== userId) {
-                                    await webrtcService.createPeerConnection(
-                                        data.user_id
-                                    );
-                                    await webrtcService.createOffer(
-                                        data.user_id
-                                    );
-                                }
-                                break;
-                            case "offer":
-                                await webrtcService.createPeerConnection(
-                                    data.from
-                                );
-                                await webrtcService.createAnswer(
-                                    data.from,
-                                    data.offer
-                                );
-                                break;
-                            case "answer":
-                                await webrtcService.setRemoteAnswer(
-                                    data.answer
-                                );
-                                break;
-                            case "ice_candidate":
-                                await webrtcService.addIceCandidate(
-                                    data.candidate
-                                );
-                                break;
-                            case "chat":
-                                setChatMessages(prev => [...prev, data]);
-                                break;
-                            case "transcript":
-                                setTranscript(prev => [...prev, data]);
-                                break;
-                            case "translation":
-                                setTranslations(prev => [...prev, data]);
-                                break;
-                            case "user_left":
-                                setParticipants(prev =>
-                                    prev.filter(
-                                        p => p.id !== data.user_id ));
-                                break;
-                            default:
-                                console.log(data);
-                            }
-                        }
-                    );
-                await new Promise(resolve => setTimeout(resolve, 500));
-                await audioService.startRecording(
-                    (audioChunk) => {
+setParticipants([
+{
+id:userId,
+name:userName,
+stream,
+local:true,
+language,
+mic:true,
+camera:true,
+speaking:false
+}
+]);
 
-                       if (websocketService.socket &&websocketService.socket.readyState === WebSocket.OPEN)
-                        {
-                            websocketService.send({
-                                type: "audio_stream",
-                                meeting_id: meetingId,
-                                user_id: userId,
-                                language,
-                                audio: Array.from(new Uint8Array(audioChunk)),
-                            });
-                        }
+await joinMeeting(
+meetingId,
+userName,
+language
+);
 
-                    }
-                );
+await websocketService.connect(
+meetingId,
+userId,
+async (data)=>{
 
-            } catch (error) {
+switch(data.type){
 
-                console.error(
-                    "Meeting initialization failed:",
-                    error
-                );
+case "user_joined":
 
-            }
+if(data.user_id!==userId){
 
-        };
+await webrtcService.createPeerConnection(
+data.user_id,
+(remoteUserId,remoteStream)=>{
 
-        initializeMeeting();
+setParticipants(prev=>{
 
-        return () => {
+const exists=
+prev.find(
+p=>p.id===remoteUserId
+);
 
-            audioService.stopRecording();
+if(exists){
 
-            websocketService.disconnect();
+return prev.map(p=>
 
-            webrtcService.closeConnection();
+p.id===remoteUserId
+?{
+...p,
+stream:remoteStream
+}
+:p
 
-        };
+);
 
-    }, [meetingId, userId]);
+}
 
-    useEffect(() => {
+return[
+...prev,
+{
+id:remoteUserId,
+name:data.user_name||"Participant",
+stream:remoteStream,
+local:false,
+language:"English",
+mic:true,
+camera:true,
+speaking:false
+}
+];
 
-        setParticipants((prev) =>
-            prev.map((participant) =>
-                participant.local
-                    ? {
-                          ...participant,
-                          language,
-                      }
-                    : participant
-            )
-        );
+});
 
-    }, [language]);
+}
+);
 
-    return (
-              <div className="meeting-room">
+await webrtcService.createOffer(
+data.user_id
+);
 
-            {/* Header */}
+}
 
-            <header className="meeting-header">
+break;
 
-                <div className="meeting-logo">
+case "offer":
 
-                    <div className="logo-circle">
-                        🌐
-                    </div>
+await webrtcService.createPeerConnection(
+data.from,
+(remoteUserId,remoteStream)=>{
 
-                    <h2>LINGUASYNC</h2>
+setParticipants(prev=>{
 
-                </div>
+const exists=
+prev.find(
+p=>p.id===remoteUserId
+);
 
-                <div className="focus-mode">
+if(exists){
 
-                    <span className="status-dot"></span>
+return prev.map(p=>
 
-                    <span>Focus Mode</span>
+p.id===remoteUserId
+?{
+...p,
+stream:remoteStream
+}
+:p
 
-                </div>
+);
 
-                <ShowUIButton />
+}
 
-            </header>
+return[
+...prev,
+{
+id:remoteUserId,
+name:"Participant",
+stream:remoteStream,
+local:false,
+language:"English",
+mic:true,
+camera:true,
+speaking:false
+}
+];
 
-            {/* Main Content */}
+});
 
-            <main className="meeting-main">
+}
+);
 
-                {/* Left Side - Video Grid */}
+await webrtcService.createAnswer(
+data.from,
+data.offer
+);
 
-                <section className="meeting-left">
+break;
 
-                    <VideoGrid
-                        participants={participants}
-                    />
+case "answer":
 
-                </section>
+await webrtcService.setRemoteAnswer(
+data.from,
+data.answer
+);
 
-                {/* Right Sidebar */}
+break;
 
-                <aside className="meeting-right">
+case "ice_candidate":
 
-                    <RightSidebar
-                        participants={participants}
-                        transcript={transcript}
-                        translations={translations}
-                        chatMessages={chatMessages}
-                        language={language}
-                        setLanguage={setLanguage}
-                    />
+await webrtcService.addIceCandidate(
+data.from,
+data.candidate
+);
 
-                </aside>
+break;
 
-            </main>
+case "chat":
 
-            {/* Bottom Controls */}
+setChatMessages(prev=>[
+...prev,
+data
+]);
 
-            <BottomControls />
+break;
 
-        </div>
+case "transcript":
 
-    );
+setTranscript(prev=>[
+...prev,
+data
+]);
+
+break;
+
+case "translation":
+
+setTranslations(prev=>[
+...prev,
+data
+]);
+
+break;
+
+case "speaking":
+
+setParticipants(prev=>
+
+prev.map(participant=>
+
+participant.id===data.user_id
+?{
+...participant,
+speaking:true
+}
+:participant
+
+)
+
+);
+
+setTimeout(()=>{
+
+setParticipants(prev=>
+
+prev.map(participant=>
+
+participant.id===data.user_id
+?{
+...participant,
+speaking:false
+}
+:participant
+
+)
+
+);
+
+},1000);
+
+break;
+
+case "user_left":
+
+webrtcService.closePeerConnection(
+data.user_id
+);
+
+setParticipants(prev=>
+prev.filter(
+p=>p.id!==data.user_id
+)
+);
+
+break;
+
+default:
+
+console.log(data);
+
+}
+
+}
+);
+
+await new Promise(resolve=>setTimeout(resolve,500));
+
+await audioService.startRecording(
+(audioChunk)=>{
+
+if(
+websocketService.socket &&
+websocketService.socket.readyState===WebSocket.OPEN
+){
+
+websocketService.send({
+
+type:"audio_stream",
+
+meeting_id:meetingId,
+
+user_id:userId,
+
+language,
+
+audio:Array.from(
+new Uint8Array(audioChunk)
+)
+
+});
+
+}
+
+}
+);
+
+}
+catch(error){
+
+console.error(
+"Meeting initialization failed:",
+error
+);
+
+}
+
+};
+
+initializeMeeting();
+
+return ()=>{
+
+audioService.stopRecording();
+
+websocketService.disconnect();
+
+webrtcService.closeAllConnections();
+
+if(webrtcService.localStream){
+
+webrtcService.localStream
+.getTracks()
+.forEach(track=>track.stop());
+
+}
+
+};
+
+},[meetingId,userId,userName,language]);
+
+useEffect(()=>{
+
+setParticipants(prev=>
+
+prev.map(p=>
+
+p.local
+?{
+...p,
+language
+}
+:p
+
+)
+
+);
+
+},[language]);
+return (
+
+<div className="meeting-room">
+
+<header className="meeting-header">
+
+<div className="meeting-logo">
+
+<div className="logo-circle">
+
+🌐
+
+</div>
+
+<h2>
+
+LINGUASYNC
+
+</h2>
+
+</div>
+
+<div className="focus-mode">
+
+<span className="status-dot"></span>
+
+<span>
+
+Focus Mode
+
+</span>
+
+</div>
+
+<ShowUIButton />
+
+</header>
+
+<main className="meeting-main">
+
+<section className="meeting-left">
+
+<VideoGrid
+participants={participants}
+/>
+
+</section>
+
+<aside className="meeting-right">
+
+<RightSidebar
+
+participants={participants}
+
+transcript={transcript}
+
+translations={translations}
+
+chatMessages={chatMessages}
+
+language={language}
+
+setLanguage={setLanguage}
+
+/>
+
+</aside>
+
+</main>
+
+<BottomControls
+
+participants={participants}
+
+meetingId={meetingId}
+
+userId={userId}
+
+language={language}
+
+/>
+
+</div>
+
+);
 
 };
 
