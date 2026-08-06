@@ -125,6 +125,7 @@ return pc;
 
 }
 async createOffer(targetUserId) {
+    console.log("createOffer() called for:", targetUserId);
 
 const pc = this.peerConnections[targetUserId];
 
@@ -147,12 +148,14 @@ offer
 }
 
 async createAnswer(targetUserId, offer) {
+    console.log("createAnswer() called for:", targetUserId);
 
 const pc = this.peerConnections[targetUserId];
 
 if (!pc) return;
 
 await pc.setRemoteDescription(
+    
 new RTCSessionDescription(offer)
 );
 
@@ -177,6 +180,7 @@ async setRemoteAnswer(
 targetUserId,
 answer
 ) {
+    console.log("Remote Answer Received");
 
 const pc =
 this.peerConnections[targetUserId];
@@ -193,7 +197,7 @@ async addIceCandidate(
 targetUserId,
 candidate
 ) {
-
+console.log("ICE Candidate Received From:", targetUserId);
 const pc =
 this.peerConnections[targetUserId];
 

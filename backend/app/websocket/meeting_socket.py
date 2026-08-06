@@ -57,6 +57,10 @@ async def meeting_socket(
             break
 
     # Broadcast user_joined immediately after connection
+    print("\n========== WEBSOCKET JOIN ==========")
+    print("Meeting:", meeting_id)
+    print("Connected Users:", manager.get_participants(meeting_id))
+    print("Broadcast User:", user_id)
     await manager.broadcast(
         meeting_id,
         {

@@ -30,7 +30,7 @@ class WhisperService:
 
         with tempfile.NamedTemporaryFile(
             delete=False,
-            suffix=".wemb"
+            suffix=".webm"
         ) as temp_audio:
 
             temp_audio.write(audio_bytes)
