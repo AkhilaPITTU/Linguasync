@@ -6,6 +6,7 @@ import VideoGrid from "../components/meeting/VideoGrid";
 import RightSidebar from "../components/meeting/RightSidebar";
 import BottomControls from "../components/meeting/BottomControls";
 import ShowUIButton from "../components/meeting/ShowUIButton";
+import AddParticipants from "./AddParticipants";
 import websocketService from "../services/websocketService";
 import webrtcService from "../services/webrtcService";
 import audioService from "../services/audioService";
@@ -24,6 +25,7 @@ const MeetingRoom = () => {
   const [transcript, setTranscript] = useState([]);
   const [translations, setTranslations] = useState([]);
   const [language, setLanguage] = useState("English");
+  const [showAddParticipants, setShowAddParticipants] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -50,6 +52,39 @@ const MeetingRoom = () => {
 
         await joinMeeting(meetingId, userName, language);
 
+        // Keep track of names we've learned from user_joined/offer/answer
+        // messages, so any participant record we create (whichever
+        // message triggers it first) gets the real name instead of a
+        // hardcoded fallback.
+        const knownNames = {};
+
+        const upsertParticipant = (remoteUserId, updates) => {
+          setParticipants((prev) => {
+            const exists = prev.find((p) => p.id === remoteUserId);
+
+            if (exists) {
+              return prev.map((p) =>
+                p.id === remoteUserId ? { ...p, ...updates } : p
+              );
+            }
+
+            return [
+              ...prev,
+              {
+                id: remoteUserId,
+                name: updates.name || knownNames[remoteUserId] || "Participant",
+                stream: updates.stream || null,
+                local: false,
+                language: "English",
+                mic: true,
+                camera: true,
+                speaking: false,
+                ...updates,
+              },
+            ];
+          });
+        };
+
         await websocketService.connect(
           meetingId,
           userId,
@@ -61,6 +96,19 @@ const MeetingRoom = () => {
                 console.log("Joined User:", data.user_id);
                 console.log("Data:", data);
 
+                if (data.user_name) {
+                  knownNames[data.user_id] = data.user_name;
+                  // Update the name if we already created a participant
+                  // record for this user before learning their name.
+                  setParticipants((prev) =>
+                    prev.map((p) =>
+                      p.id === data.user_id
+                        ? { ...p, name: data.user_name }
+                        : p
+                    )
+                  );
+                }
+
                 if (data.user_id !== userId) {
                   console.log("Creating PeerConnection for:", data.user_id);
 
@@ -68,32 +116,7 @@ const MeetingRoom = () => {
                     data.user_id,
                     (remoteUserId, remoteStream) => {
                       console.log("Remote Stream From:", remoteUserId);
-
-                      setParticipants((prev) => {
-                        const exists = prev.find((p) => p.id === remoteUserId);
-
-                        if (exists) {
-                          return prev.map((p) =>
-                            p.id === remoteUserId
-                              ? { ...p, stream: remoteStream }
-                              : p
-                          );
-                        }
-
-                        return [
-                          ...prev,
-                          {
-                            id: remoteUserId,
-                            name: data.user_name || "Participant",
-                            stream: remoteStream,
-                            local: false,
-                            language: "English",
-                            mic: true,
-                            camera: true,
-                            speaking: false,
-                          },
-                        ];
-                      });
+                      upsertParticipant(remoteUserId, { stream: remoteStream });
                     }
                   );
 
@@ -106,36 +129,23 @@ const MeetingRoom = () => {
               case "offer": {
                 console.log("Received OFFER from:", data.from);
 
+                if (data.user_name) {
+                  knownNames[data.from] = data.user_name;
+                }
+
                 await webrtcService.createPeerConnection(
                   data.from,
                   (remoteUserId, remoteStream) => {
-                    setParticipants((prev) => {
-                      const exists = prev.find((p) => p.id === remoteUserId);
-
-                      if (exists) {
-                        return prev.map((p) =>
-                          p.id === remoteUserId
-                            ? { ...p, stream: remoteStream }
-                            : p
-                        );
-                      }
-
-                      return [
-                        ...prev,
-                        {
-                          id: remoteUserId,
-                          name: "Participant",
-                          stream: remoteStream,
-                          local: false,
-                          language: "English",
-                          mic: true,
-                          camera: true,
-                          speaking: false,
-                        },
-                      ];
-                    });
+                    upsertParticipant(remoteUserId, { stream: remoteStream });
                   }
                 );
+
+                // Make sure the participant entry has the real name,
+                // even if createPeerConnection's onRemoteStream callback
+                // hasn't fired yet.
+                upsertParticipant(data.from, {
+                  name: data.user_name || knownNames[data.from] || "Participant",
+                });
 
                 await webrtcService.createAnswer(data.from, data.offer);
                 break;
@@ -143,6 +153,12 @@ const MeetingRoom = () => {
 
               case "answer": {
                 console.log("Received ANSWER from:", data.from);
+
+                if (data.user_name) {
+                  knownNames[data.from] = data.user_name;
+                  upsertParticipant(data.from, { name: data.user_name });
+                }
+
                 await webrtcService.setRemoteAnswer(data.from, data.answer);
                 break;
               }
@@ -282,7 +298,15 @@ const MeetingRoom = () => {
         meetingId={meetingId}
         userId={userId}
         language={language}
+        onAddParticipants={() => setShowAddParticipants(true)}
       />
+
+      {showAddParticipants && (
+        <AddParticipants
+          meetingId={meetingId}
+          onClose={() => setShowAddParticipants(false)}
+        />
+      )}
     </div>
   );
 };

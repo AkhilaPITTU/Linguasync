@@ -1,113 +1,56 @@
-.participants-page {
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 30px;
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-}
+/* ==========================================
+   MODAL OVERLAY — add this to AddParticipants.css
+   ========================================== */
 
-.participants-page h2 {
-    text-align: center;
-    margin-bottom: 25px;
-    color: #222;
-    font-size: 28px;
-}
-
-.participants-page input[type="text"] {
-    width: 100%;
-    padding: 14px 16px;
-    border: 1px solid #dcdcdc;
-    border-radius: 8px;
-    outline: none;
-    font-size: 15px;
-    margin-bottom: 25px;
-    transition: 0.3s;
-}
-
-.participants-page input[type="text"]:focus {
-    border-color: #2563eb;
-}
-
-.participants-list {
+.participants-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
     display: flex;
-    flex-direction: column;
-    gap: 15px;
-    max-height: 450px;
-    overflow-y: auto;
-    margin-bottom: 25px;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
 }
 
-.participant-card {
+/* The existing .participants-page rules (background, padding,
+   border-radius, etc.) still apply — we're just constraining
+   its size and giving it scroll behavior now that it floats
+   inside an overlay instead of being a full page. */
+
+.participants-page {
+    max-width: 600px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 12px;
+}
+
+.participants-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px;
-    border: 1px solid #e5e5e5;
-    border-radius: 10px;
-    transition: 0.3s;
-    background: #fafafa;
+    margin-bottom: 12px;
 }
 
-.participant-card:hover {
-    background: #f3f8ff;
-    border-color: #2563eb;
-}
-
-.participant-card h4 {
+.participants-modal-header h2 {
     margin: 0;
-    color: #222;
-    font-size: 17px;
 }
 
-.participant-card p {
-    margin-top: 5px;
-    color: #666;
-    font-size: 14px;
-}
-
-.participant-card input[type="checkbox"] {
-    width: 22px;
-    height: 22px;
-    cursor: pointer;
-}
-
-.invite-btn {
-    width: 100%;
-    padding: 15px;
+.participants-modal-close {
+    background: none;
     border: none;
-    border-radius: 10px;
-    background: #2563eb;
-    color: white;
-    font-size: 16px;
-    font-weight: 600;
+    color: inherit;
+    font-size: 1.4rem;
+    line-height: 1;
     cursor: pointer;
-    transition: 0.3s;
+    padding: 4px 8px;
+    border-radius: 6px;
 }
 
-.invite-btn:hover {
-    background: #1d4ed8;
-}
-
-.invite-btn:active {
-    transform: scale(0.98);
-}
-
-@media (max-width: 768px) {
-
-    .participants-page {
-        margin: 20px;
-        padding: 20px;
-    }
-
-    .participant-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 15px;
-    }
-
-    .participant-card input[type="checkbox"] {
-        align-self: flex-end;
-    }
-
+.participants-modal-close:hover {
+    background: rgba(0, 0, 0, 0.08);
 }

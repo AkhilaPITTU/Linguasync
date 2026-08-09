@@ -2,386 +2,423 @@ import websocketService from "./websocketService";
 
 class WebRTCService {
 
-constructor() {
-
-this.peerConnections = {};
-
-this.localStream = null;
-
-this.configuration = {
-iceServers: [
-{
-urls: "stun:stun.l.google.com:19302",
-}
-],
-};
-
-}
-
-async startLocalStream(video = true, audio = true) {
-
-if (this.localStream) {
-return this.localStream;
-}
-
-this.localStream =
-await navigator.mediaDevices.getUserMedia({
-video,
-audio
-});
-
-return this.localStream;
-
-}
-
-async createPeerConnection(
-targetUserId,
-onRemoteStream
-) {
-
-if (this.peerConnections[targetUserId]) {
-return this.peerConnections[targetUserId];
-}
-
-const pc =
-new RTCPeerConnection(this.configuration);
-
-this.peerConnections[targetUserId] = pc;
-
-if (this.localStream) {
-
-this.localStream
-.getTracks()
-.forEach(track => {
-
-pc.addTrack(
-track,
-this.localStream
-);
-
-});
-
-}
-
-pc.ontrack = (event) => {
-
-const remoteStream =
-event.streams[0];
-
-console.log(
-"Remote Stream From:",
-targetUserId
-);
-
-if (onRemoteStream) {
-
-onRemoteStream(
-targetUserId,
-remoteStream
-);
-
-}
-
-};
-
-pc.onicecandidate = (event) => {
-
-if (!event.candidate) return;
-
-websocketService.send({
-
-type: "ice_candidate",
-
-target: targetUserId,
-
-candidate: event.candidate
-
-});
-
-};
-
-pc.onconnectionstatechange = () => {
-
-console.log(
-targetUserId,
-pc.connectionState
-);
-
-if (
-pc.connectionState === "failed" ||
-pc.connectionState === "closed" ||
-pc.connectionState === "disconnected"
-) {
-
-delete this.peerConnections[
-targetUserId
-];
-
-}
-
-};
-
-return pc;
-
-}
-async createOffer(targetUserId) {
-    console.log("createOffer() called for:", targetUserId);
-
-const pc = this.peerConnections[targetUserId];
-
-if (!pc) return;
-
-const offer = await pc.createOffer();
-
-await pc.setLocalDescription(offer);
-
-websocketService.send({
-
-type: "offer",
-
-target: targetUserId,
-
-offer
-
-});
-
-}
-
-async createAnswer(targetUserId, offer) {
-    console.log("createAnswer() called for:", targetUserId);
-
-const pc = this.peerConnections[targetUserId];
-
-if (!pc) return;
-
-await pc.setRemoteDescription(
-    
-new RTCSessionDescription(offer)
-);
-
-const answer =
-await pc.createAnswer();
-
-await pc.setLocalDescription(answer);
-
-websocketService.send({
-
-type: "answer",
-
-target: targetUserId,
-
-answer
-
-});
-
-}
-
-async setRemoteAnswer(
-targetUserId,
-answer
-) {
-    console.log("Remote Answer Received");
-
-const pc =
-this.peerConnections[targetUserId];
-
-if (!pc) return;
-
-await pc.setRemoteDescription(
-new RTCSessionDescription(answer)
-);
-
-}
-
-async addIceCandidate(
-targetUserId,
-candidate
-) {
-console.log("ICE Candidate Received From:", targetUserId);
-const pc =
-this.peerConnections[targetUserId];
-
-if (!pc) return;
-
-try {
-
-await pc.addIceCandidate(
-new RTCIceCandidate(candidate)
-);
-
-}
-catch (err) {
-
-console.error(
-"ICE Error",
-err
-);
-
-}
-
-}
-closePeerConnection(targetUserId) {
-
-const pc = this.peerConnections[targetUserId];
-
-if (!pc) return;
-
-pc.close();
-
-delete this.peerConnections[targetUserId];
-
-}
-
-closeAllConnections() {
-
-Object.keys(this.peerConnections).forEach(userId => {
-
-this.closePeerConnection(userId);
-
-});
-
-}
-
-closeConnection() {
-
-this.closeAllConnections();
-
-if (this.localStream) {
-
-this.localStream.getTracks().forEach(track => {
-
-track.stop();
-
-});
-
-this.localStream = null;
-
-}
-
-}
-getPeerConnection(targetUserId) {
-
-return this.peerConnections[targetUserId];
-
-}
-
-hasPeerConnection(targetUserId) {
-
-return !!this.peerConnections[targetUserId];
-
-}
-
-removePeerConnection(targetUserId) {
-
-if (this.peerConnections[targetUserId]) {
-
-this.peerConnections[targetUserId].close();
-
-delete this.peerConnections[targetUserId];
-
-}
-
-}
-getLocalStream() {
-
-    return this.localStream;
-
-}
-
-toggleMicrophone(enabled) {
-
-    if (!this.localStream) return;
-
-    this.localStream
-        .getAudioTracks()
-        .forEach(track => {
-
-            track.enabled = enabled;
-
-        });
-
-}
-
-toggleCamera(enabled) {
-
-    if (!this.localStream) return;
-
-    this.localStream
-        .getVideoTracks()
-        .forEach(track => {
-
-            track.enabled = enabled;
-
-        });
-
-}
-
-replaceVideoTrack(newTrack) {
-
-    Object.values(this.peerConnections).forEach(pc => {
-
-        const sender = pc.getSenders().find(
-            sender =>
-                sender.track &&
-                sender.track.kind === "video"
-        );
-
-        if (sender) {
-
-            sender.replaceTrack(newTrack);
-
+    constructor() {
+
+        this.peerConnections = {};
+        this.localStream = null;
+
+        this.configuration = {
+            iceServers: [
+                {
+                    urls: "stun:stun.l.google.com:19302",
+                }
+            ],
+        };
+    }
+
+    // ============================================
+    // LOCAL CAMERA + MICROPHONE
+    // ============================================
+
+    async startLocalStream(video = true, audio = true) {
+
+        if (this.localStream) {
+            return this.localStream;
         }
 
-    });
+        try {
 
-}
+            this.localStream =
+                await navigator.mediaDevices.getUserMedia({
+                    video,
+                    audio
+                });
 
-replaceAudioTrack(newTrack) {
+            console.log("LOCAL STREAM:", this.localStream);
+            console.log("LOCAL VIDEO TRACKS:", this.localStream.getVideoTracks());
+            console.log("LOCAL AUDIO TRACKS:", this.localStream.getAudioTracks());
 
-    Object.values(this.peerConnections).forEach(pc => {
+            this.localStream.getAudioTracks().forEach(track => {
+                console.log("MIC TRACK:", {
+                    enabled: track.enabled,
+                    muted: track.muted,
+                    readyState: track.readyState
+                });
+            });
 
-        const sender = pc.getSenders().find(
-            sender =>
-                sender.track &&
-                sender.track.kind === "audio"
-        );
+            if (this.localStream.getAudioTracks().length === 0) {
+                console.warn("⚠️ No audio track captured from getUserMedia(). Mic permission or hardware issue.");
+            }
 
-        if (sender) {
-             sender.replaceTrack(newTrack);
+            return this.localStream;
 
+        } catch (error) {
+            console.error("Camera/Microphone Error:", error);
+            throw error;
+        }
+    }
+
+
+    // ============================================
+    // CREATE PEER CONNECTION
+    // ============================================
+
+    async createPeerConnection(
+        targetUserId,
+        onRemoteStream
+    ) {
+
+        if (this.peerConnections[targetUserId]) {
+            console.log("PeerConnection already exists:", targetUserId);
+            return this.peerConnections[targetUserId];
         }
 
-    });
+        const pc = new RTCPeerConnection(this.configuration);
 
-}
+        this.peerConnections[targetUserId] = pc;
 
-async startScreenShare() {
+        console.log("PeerConnection Created:", targetUserId);
 
-    const stream =
-        await navigator.mediaDevices.getDisplayMedia({
+        // ========================================
+        // ADD LOCAL AUDIO + VIDEO
+        // ========================================
 
-            video: true
+        if (this.localStream) {
 
+            const tracks = this.localStream.getTracks();
+            console.log("Adding Local Tracks to PC for", targetUserId, ":", tracks);
+
+            tracks.forEach(track => {
+                console.log("Adding Track:", track.kind, "enabled:", track.enabled, "readyState:", track.readyState);
+                pc.addTrack(track, this.localStream);
+            });
+
+        } else {
+            console.warn("⚠️ createPeerConnection called but this.localStream is null — no tracks will be sent!");
+        }
+
+
+        // ========================================
+        // RECEIVE REMOTE STREAM
+        // ========================================
+
+        pc.ontrack = (event) => {
+
+            console.log("========== REMOTE TRACK ==========");
+            console.log("From:", targetUserId);
+            console.log("Track Kind:", event.track.kind);
+            console.log("Track Enabled:", event.track.enabled);
+            console.log("Track Muted:", event.track.muted);
+            console.log("Track ReadyState:", event.track.readyState);
+
+            const remoteStream = event.streams[0];
+
+            if (!remoteStream) {
+                console.warn("No remote stream received");
+                return;
+            }
+
+            console.log("REMOTE AUDIO TRACKS:", remoteStream.getAudioTracks());
+            console.log("REMOTE VIDEO TRACKS:", remoteStream.getVideoTracks());
+
+            remoteStream.getAudioTracks().forEach(track => {
+                console.log("REMOTE AUDIO:", {
+                    enabled: track.enabled,
+                    muted: track.muted,
+                    readyState: track.readyState
+                });
+            });
+
+            if (remoteStream.getAudioTracks().length === 0) {
+                console.warn("⚠️ Remote stream has NO audio tracks. Sender-side negotiation problem.");
+            }
+
+            console.log("Remote Stream From:", targetUserId);
+
+            if (onRemoteStream) {
+                onRemoteStream(targetUserId, remoteStream);
+            }
+
+        };
+
+
+        // ========================================
+        // ICE CANDIDATE
+        // ========================================
+
+        pc.onicecandidate = (event) => {
+
+            if (!event.candidate) return;
+
+            websocketService.send({
+                type: "ice_candidate",
+                target: targetUserId,
+                candidate: event.candidate
+            });
+
+        };
+
+
+        // ========================================
+        // CONNECTION STATE
+        // ========================================
+
+        pc.onconnectionstatechange = () => {
+
+            console.log("Peer:", targetUserId, "Connection:", pc.connectionState);
+
+            if (
+                pc.connectionState === "failed" ||
+                pc.connectionState === "closed" ||
+                pc.connectionState === "disconnected"
+            ) {
+                delete this.peerConnections[targetUserId];
+            }
+
+        };
+
+        pc.oniceconnectionstatechange = () => {
+            console.log("ICE State:", targetUserId, pc.iceConnectionState);
+        };
+
+        // Log what the SDP actually negotiated for audio, once
+        // stable. This tells us if the m=audio line was even
+        // included/accepted on both ends.
+        pc.onsignalingstatechange = () => {
+
+            console.log("Signaling State:", targetUserId, pc.signalingState);
+
+            if (pc.signalingState === "stable" && pc.currentLocalDescription) {
+
+                const hasAudioLocal =
+                    pc.currentLocalDescription.sdp.includes("m=audio");
+                const hasAudioRemote =
+                    pc.currentRemoteDescription
+                        ? pc.currentRemoteDescription.sdp.includes("m=audio")
+                        : false;
+
+                console.log(
+                    "SDP has audio — local:", hasAudioLocal,
+                    "remote:", hasAudioRemote,
+                    "(peer:", targetUserId, ")"
+                );
+
+            }
+
+        };
+
+        return pc;
+    }
+
+
+    // ============================================
+    // CREATE OFFER
+    // ============================================
+
+    async createOffer(targetUserId) {
+
+        console.log("createOffer() called for:", targetUserId);
+
+        const pc = this.peerConnections[targetUserId];
+
+        if (!pc) {
+            console.error("PeerConnection not found:", targetUserId);
+            return;
+        }
+
+        const offer = await pc.createOffer();
+
+        console.log("OFFER SDP has audio:", offer.sdp.includes("m=audio"));
+
+        await pc.setLocalDescription(offer);
+
+        websocketService.send({
+            type: "offer",
+            target: targetUserId,
+            offer
         });
 
-    const videoTrack =
-        stream.getVideoTracks()[0];
+    }
 
-     this.replaceVideoTrack(videoTrack);
 
-    videoTrack.onended = () => {
+    // ============================================
+    // CREATE ANSWER
+    // ============================================
 
+    async createAnswer(targetUserId, offer) {
+
+        console.log("createAnswer() called for:", targetUserId);
+        console.log("Incoming OFFER SDP has audio:", offer?.sdp?.includes("m=audio"));
+
+        const pc = this.peerConnections[targetUserId];
+
+        if (!pc) {
+            console.error("PeerConnection not found:", targetUserId);
+            return;
+        }
+
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+        const answer = await pc.createAnswer();
+
+        console.log("ANSWER SDP has audio:", answer.sdp.includes("m=audio"));
+
+        await pc.setLocalDescription(answer);
+
+        websocketService.send({
+            type: "answer",
+            target: targetUserId,
+            answer
+        });
+
+    }
+
+
+    // ============================================
+    // SET REMOTE ANSWER
+    // ============================================
+
+    async setRemoteAnswer(targetUserId, answer) {
+
+        console.log("Remote Answer Received:", targetUserId);
+        console.log("Incoming ANSWER SDP has audio:", answer?.sdp?.includes("m=audio"));
+
+        const pc = this.peerConnections[targetUserId];
+
+        if (!pc) return;
+
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+    }
+
+
+    // ============================================
+    // ADD ICE CANDIDATE
+    // ============================================
+
+    async addIceCandidate(targetUserId, candidate) {
+
+        console.log("ICE Candidate Received From:", targetUserId);
+
+        const pc = this.peerConnections[targetUserId];
+
+        if (!pc) return;
+
+        try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (error) {
+            console.error("ICE Error:", error);
+        }
+    }
+
+
+    // ============================================
+    // CLOSE
+    // ============================================
+
+    closePeerConnection(targetUserId) {
+        const pc = this.peerConnections[targetUserId];
+        if (!pc) return;
+        pc.close();
+        delete this.peerConnections[targetUserId];
+    }
+
+    closeAllConnections() {
+        Object.keys(this.peerConnections).forEach(userId => {
+            this.closePeerConnection(userId);
+        });
+    }
+
+    closeConnection() {
+        this.closeAllConnections();
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+    }
+
+    getPeerConnection(targetUserId) {
+        return this.peerConnections[targetUserId];
+    }
+
+    hasPeerConnection(targetUserId) {
+        return !!this.peerConnections[targetUserId];
+    }
+
+    removePeerConnection(targetUserId) {
+        if (this.peerConnections[targetUserId]) {
+            this.peerConnections[targetUserId].close();
+            delete this.peerConnections[targetUserId];
+        }
+    }
+
+    getLocalStream() {
+        return this.localStream;
+    }
+
+    toggleMicrophone(enabled) {
         if (!this.localStream) return;
+        this.localStream.getAudioTracks().forEach(track => {
+            track.enabled = enabled;
+            console.log("Microphone:", enabled);
+        });
+    }
 
-        const cameraTrack =
-            this.localStream.getVideoTracks()[0];
+    toggleCamera(enabled) {
+        if (!this.localStream) return;
+        this.localStream.getVideoTracks().forEach(track => {
+            track.enabled = enabled;
+            console.log("Camera:", enabled);
+        });
+    }
 
-         this.replaceVideoTrack(cameraTrack);
+    async replaceVideoTrack(newTrack) {
+        const promises = [];
+        Object.values(this.peerConnections).forEach(pc => {
+            const sender = pc.getSenders().find(
+                sender => sender.track && sender.track.kind === "video"
+            );
+            if (sender) {
+                promises.push(sender.replaceTrack(newTrack));
+            }
+        });
+        await Promise.all(promises);
+    }
 
-    };
+    async replaceAudioTrack(newTrack) {
+        const promises = [];
+        Object.values(this.peerConnections).forEach(pc => {
+            const sender = pc.getSenders().find(
+                sender => sender.track && sender.track.kind === "audio"
+            );
+            if (sender) {
+                promises.push(sender.replaceTrack(newTrack));
+            }
+        });
+        await Promise.all(promises);
+    }
 
-    return stream;
+    async startScreenShare() {
+
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true
+        });
+
+        const videoTrack = stream.getVideoTracks()[0];
+
+        await this.replaceVideoTrack(videoTrack);
+
+        videoTrack.onended = async () => {
+            if (!this.localStream) return;
+            const cameraTrack = this.localStream.getVideoTracks()[0];
+            if (cameraTrack) {
+                await this.replaceVideoTrack(cameraTrack);
+            }
+        };
+
+        return stream;
+    }
 
 }
-}
+
 export default new WebRTCService();

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 
 import {
     getUsers,
@@ -8,10 +7,15 @@ import {
 
 import "./AddParticipants.css";
 
-const AddParticipants = () => {
+// This component is now rendered as an in-call modal from
+// MeetingRoom instead of being mounted at its own route. It used
+// to read meetingId from useParams() and call navigate() to close
+// itself -- both of those caused MeetingRoom to unmount, which
+// stopped the local camera/mic tracks and tore down the
+// websocket + all peer connections. Now it takes meetingId and
+// onClose as props, and MeetingRoom stays mounted the whole time.
 
-    const { meetingId } = useParams();
-    const navigate = useNavigate();
+const AddParticipants = ({ meetingId, onClose }) => {
 
     const [users, setUsers] = useState([]);
     const [selectedUsers, setSelectedUsers] = useState([]);
@@ -64,7 +68,7 @@ const AddParticipants = () => {
 
             if (response.success) {
                 alert("Invitations sent successfully.");
-                navigate(`/meeting/${meetingId}`);
+                onClose();
             } else {
                 alert(response.message || "Failed to send invitations.");
             }
@@ -90,57 +94,81 @@ const AddParticipants = () => {
         user.email.toLowerCase().includes(search.toLowerCase())
     );
 
-    if (loading) {
-        return <h2>Loading users...</h2>;
-    }
-
     return (
-        <div className="participants-page">
+        <div className="participants-modal-overlay" onClick={onClose}>
 
-            <h2>Add Participants</h2>
+            <div
+                className="participants-page"
+                onClick={(e) => e.stopPropagation()}
+            >
 
-            <input
-                type="text"
-                placeholder="Search users..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-            />
+                <div className="participants-modal-header">
+                    <h2>Add Participants</h2>
+                    <button
+                        className="participants-modal-close"
+                        onClick={onClose}
+                        aria-label="Close"
+                    >
+                        ✕
+                    </button>
+                </div>
 
-            <div className="participants-list">
+                {loading ? (
 
-                {filteredUsers.length === 0 ? (
-                    <p>No users found.</p>
+                    <h2>Loading users...</h2>
+
                 ) : (
-                    filteredUsers.map(user => (
-                        <div
-                            key={user.user_id}
-                            className="participant-card"
-                        >
 
-                            <div>
-                                <h4>{user.full_name}</h4>
-                                <p>{user.email}</p>
-                            </div>
+                    <>
 
-                            <input
-                                type="checkbox"
-                                checked={selectedUsers.includes(user.user_id)}
-                                onChange={() => toggleUser(user.user_id)}
-                            />
+                        <input
+                            type="text"
+                            placeholder="Search users..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+
+                        <div className="participants-list">
+
+                            {filteredUsers.length === 0 ? (
+                                <p>No users found.</p>
+                            ) : (
+                                filteredUsers.map(user => (
+                                    <div
+                                        key={user.user_id}
+                                        className="participant-card"
+                                    >
+
+                                        <div>
+                                            <h4>{user.full_name}</h4>
+                                            <p>{user.email}</p>
+                                        </div>
+
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedUsers.includes(user.user_id)}
+                                            onChange={() => toggleUser(user.user_id)}
+                                        />
+
+                                    </div>
+                                ))
+                            )}
 
                         </div>
-                    ))
+
+                        <button
+                            className="invite-btn"
+                            onClick={inviteUsers}
+                            disabled={sending}
+                        >
+                            {sending ? "Sending..." : "Send Invitations"}
+                        </button>
+
+                    </>
+
                 )}
 
             </div>
-
-            <button
-                className="invite-btn"
-                onClick={inviteUsers}
-                disabled={sending}
-            >
-                {sending ? "Sending..." : "Send Invitations"}
-            </button>
 
         </div>
     );

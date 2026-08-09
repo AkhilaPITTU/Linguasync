@@ -25,7 +25,15 @@ import {
     leaveMeeting as leaveMeetingAPI
 } from "../../services/meetingService";
 
-const BottomControls = () => {
+// NOTE: "Add Participants" no longer navigates to a separate route.
+// Navigating away used to unmount MeetingRoom, whose cleanup effect
+// stops the local camera/mic tracks and tears down the websocket +
+// peer connections -- which looked like your video "muting itself"
+// right after inviting someone. Now it just calls onAddParticipants
+// (passed down from MeetingRoom), which opens an in-call modal
+// instead, so MeetingRoom stays mounted the whole time.
+
+const BottomControls = ({ onAddParticipants }) => {
 
     const navigate = useNavigate();
 
@@ -92,7 +100,9 @@ const BottomControls = () => {
 
     const handleAddParticipants = () => {
 
-        navigate(`/meeting/${meetingId}/participants`);
+        if (onAddParticipants) {
+            onAddParticipants();
+        }
 
     };
 

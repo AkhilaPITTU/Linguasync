@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.websocket.connection_manager import manager
 from app.ai.whisper_service import whisper_service
@@ -13,6 +15,14 @@ from app.services.ai_feedback_service import ai_feedback_service
 router = APIRouter()
 
 meetings_collection = database["meetings"]
+
+
+def _get_user_name(meeting: dict, user_id: str) -> str:
+    """Look up a participant's display name from the meeting document."""
+    for participant in meeting.get("participants", []):
+        if participant.get("user_id") == user_id:
+            return participant.get("user_name", "Participant")
+    return "Participant"
 
 
 # =====================================================
@@ -50,11 +60,7 @@ async def meeting_socket(
         return
 
     # Extract user name for the user who just joined
-    user_name = "Participant"
-    for participant in meeting.get("participants", []):
-        if participant.get("user_id") == user_id:
-            user_name = participant.get("user_name", "Participant")
-            break
+    user_name = _get_user_name(meeting, user_id)
 
     # Broadcast user_joined immediately after connection
     print("\n========== WEBSOCKET JOIN ==========")
@@ -93,11 +99,24 @@ async def meeting_socket(
             # ==========================================
             # WEBRTC OFFER
             # ==========================================
+            # Re-fetch the meeting doc here so we can attach the
+            # sender's display name. The frontend was previously
+            # falling back to a hardcoded "Participant" string
+            # whenever it created a remote participant from an
+            # "offer" message (rather than "user_joined"), because
+            # this payload never carried a name.
             elif message_type == "offer":
+                offer_meeting = await meetings_collection.find_one(
+                    {"meeting_id": meeting_id},
+                    {"_id": 0, "participants": 1}
+                )
+                sender_name = _get_user_name(offer_meeting or {}, user_id)
+
                 await manager.send_personal_message(
                     {
                         "type": "offer",
                         "from": user_id,
+                        "user_name": sender_name,
                         "offer": data.get("offer")
                     },
                     meeting_id,
@@ -108,10 +127,17 @@ async def meeting_socket(
             # WEBRTC ANSWER
             # ==========================================
             elif message_type == "answer":
+                answer_meeting = await meetings_collection.find_one(
+                    {"meeting_id": meeting_id},
+                    {"_id": 0, "participants": 1}
+                )
+                sender_name = _get_user_name(answer_meeting or {}, user_id)
+
                 await manager.send_personal_message(
                     {
                         "type": "answer",
                         "from": user_id,
+                        "user_name": sender_name,
                         "answer": data.get("answer")
                     },
                     meeting_id,
@@ -135,10 +161,30 @@ async def meeting_socket(
             # ==========================================
             # AUDIO STREAM
             # ==========================================
+            # NOTE: This branch used to call several blocking /
+            # CPU-heavy functions (noise detection, Whisper
+            # transcription, grammar correction, translation, etc.)
+            # directly inside this async loop. Since this loop is
+            # also responsible for immediately relaying "offer",
+            # "answer", and "ice_candidate" messages for WebRTC
+            # signaling, blocking here starved the event loop and
+            # delayed/dropped that signaling traffic -- which is
+            # what caused audio (and the periodic
+            # "1011 keepalive ping timeout" disconnects) to break
+            # even though ICE/video looked "connected". Every
+            # blocking call below now runs via asyncio.to_thread so
+            # the event loop stays free to service other messages
+            # while transcription/translation work happens in a
+            # worker thread.
+            # ==========================================
             elif message_type == "audio_stream":
                 try:
                     audio_bytes = bytes(data.get("audio", []))
-                    noise_result = noise_detection_service.analyze(audio_bytes)
+
+                    noise_result = await asyncio.to_thread(
+                        noise_detection_service.analyze,
+                        audio_bytes
+                    )
 
                     if not noise_result["is_valid"]:
                         await manager.send_personal_message(
@@ -154,23 +200,31 @@ async def meeting_socket(
 
                     audio_quality = noise_result["audio_quality"]
 
-                    transcript_result = whisper_service.transcribe(audio_bytes)
+                    transcript_result = await asyncio.to_thread(
+                        whisper_service.transcribe,
+                        audio_bytes
+                    )
                     transcript = transcript_result.get("text", "")
                     detected_language = transcript_result.get("language", "en")
                     whisper_confidence = transcript_result.get("confidence", 0)
 
-                    speech_result = speech_accuracy_service.analyze(
+                    speech_result = await asyncio.to_thread(
+                        speech_accuracy_service.analyze,
                         transcript,
                         whisper_confidence
                     )
                     speech_accuracy = speech_result["accuracy"]
                     speech_status = speech_result["status"]
 
-                    grammar_result = grammar_correction_service.correct(transcript)
+                    grammar_result = await asyncio.to_thread(
+                        grammar_correction_service.correct,
+                        transcript
+                    )
                     transcript = grammar_result["corrected_text"]
                     grammar_modified = grammar_result["modified"]
 
-                    confidence_result = confidence_service.calculate(
+                    confidence_result = await asyncio.to_thread(
+                        confidence_service.calculate,
                         whisper_confidence,
                         audio_quality,
                         speech_accuracy
@@ -178,7 +232,10 @@ async def meeting_socket(
                     overall_confidence = confidence_result["confidence"]
                     confidence_level = confidence_result["level"]
 
-                    review_result = human_review_service.evaluate(overall_confidence)
+                    review_result = await asyncio.to_thread(
+                        human_review_service.evaluate,
+                        overall_confidence
+                    )
                     review_required = review_result["review_required"]
                     review_message = review_result["review_message"]
 
@@ -206,7 +263,8 @@ async def meeting_socket(
 
                     target_lang = language_map.get(target_language, "en")
 
-                    translated_text = translation_service.translate(
+                    translated_text = await asyncio.to_thread(
+                        translation_service.translate,
                         transcript,
                         source_lang=detected_language,
                         target_lang=target_lang
