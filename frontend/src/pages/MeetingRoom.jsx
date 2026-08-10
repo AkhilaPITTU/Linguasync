@@ -1,5 +1,5 @@
 import "./MeetingRoom.css";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { joinMeeting } from "../services/meetingService";
 import VideoGrid from "../components/meeting/VideoGrid";
@@ -11,13 +11,21 @@ import websocketService from "../services/websocketService";
 import webrtcService from "../services/webrtcService";
 import audioService from "../services/audioService";
 
+// Minimum time between audio_stream sends. The AI pipeline
+// (noise check -> transcribe -> grammar -> translate -> deliver)
+// takes real time per chunk; sending faster than that just builds
+// a backlog server-side and was contributing to WebSocket ping
+// timeouts under load. Throttling here keeps us close to what the
+// server can actually keep up with.
+const AUDIO_SEND_INTERVAL_MS = 1000;
+
 const MeetingRoom = () => {
   const { meetingId } = useParams();
 
   // Safely extract and sanitize userId by removing any trailing colon suffixes or invalid spaces
   const rawUserId = localStorage.getItem("user_id") || "";
   const userId = rawUserId.includes(":") ? rawUserId.split(":")[0].trim() : rawUserId.trim();
-  
+
   const userName = localStorage.getItem("user_name") || "Participant";
 
   const [participants, setParticipants] = useState([]);
@@ -26,6 +34,8 @@ const MeetingRoom = () => {
   const [translations, setTranslations] = useState([]);
   const [language, setLanguage] = useState("English");
   const [showAddParticipants, setShowAddParticipants] = useState(false);
+  const subtitleTimeoutsRef = useRef({});
+  const lastAudioSentAtRef = useRef(0);
 
   useEffect(() => {
     if (!userId) {
@@ -184,6 +194,34 @@ const MeetingRoom = () => {
 
               case "translation": {
                 setTranslations((prev) => [...prev, data]);
+
+                // Show the translated text as a live subtitle under
+                // that speaker's video tile, and auto-clear it a
+                // few seconds later so it doesn't stay frozen once
+                // they've stopped talking.
+                if (data.text) {
+                  setParticipants((prev) =>
+                    prev.map((p) =>
+                      p.id === data.user_id
+                        ? { ...p, subtitle: data.text }
+                        : p
+                    )
+                  );
+
+                  if (subtitleTimeoutsRef.current[data.user_id]) {
+                    clearTimeout(subtitleTimeoutsRef.current[data.user_id]);
+                  }
+
+                  subtitleTimeoutsRef.current[data.user_id] = setTimeout(() => {
+                    setParticipants((prev) =>
+                      prev.map((p) =>
+                        p.id === data.user_id
+                          ? { ...p, subtitle: "" }
+                          : p
+                      )
+                    );
+                  }, 5000);
+                }
                 break;
               }
 
@@ -225,10 +263,20 @@ const MeetingRoom = () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         await audioService.startRecording((audioChunk) => {
+          const now = Date.now();
+
+          // Throttle: skip this chunk if we sent one too recently.
+          // See AUDIO_SEND_INTERVAL_MS comment above.
+          if (now - lastAudioSentAtRef.current < AUDIO_SEND_INTERVAL_MS) {
+            return;
+          }
+
           if (
             websocketService.socket &&
             websocketService.socket.readyState === WebSocket.OPEN
           ) {
+            lastAudioSentAtRef.current = now;
+
             websocketService.send({
               type: "audio_stream",
               meeting_id: meetingId,
@@ -249,6 +297,10 @@ const MeetingRoom = () => {
       audioService.stopRecording();
       websocketService.disconnect();
       webrtcService.closeAllConnections();
+
+      Object.values(subtitleTimeoutsRef.current).forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
 
       if (webrtcService.localStream) {
         webrtcService.localStream.getTracks().forEach((track) => track.stop());
