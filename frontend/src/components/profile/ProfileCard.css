@@ -1,0 +1,177 @@
+.profile-card {
+    width: 100%;
+    padding: 28px;
+    box-sizing: border-box;
+
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.05);
+}
+
+
+/* =========================
+   TOP
+========================= */
+
+.profile-card-top {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+
+    padding-bottom: 25px;
+    border-bottom: 1px solid #eef0f2;
+}
+
+.profile-avatar {
+    width: 72px;
+    height: 72px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #10b981;
+    color: white;
+
+    font-size: 25px;
+    font-weight: 700;
+}
+
+.profile-main-info h2 {
+    margin: 0;
+
+    font-size: 24px;
+    color: #111827;
+}
+
+.profile-main-info p {
+    margin: 6px 0 0;
+
+    color: #6b7280;
+    font-size: 14px;
+}
+
+
+/* =========================
+   DETAILS
+========================= */
+
+.profile-details {
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 15px;
+
+    padding: 25px 0;
+}
+
+.profile-detail {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    padding: 16px;
+
+    border-radius: 14px;
+
+    background: #f9fafb;
+}
+
+.detail-icon {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 10px;
+
+    background: #ecfdf5;
+
+    font-size: 18px;
+}
+
+.profile-detail > div {
+    display: flex;
+    flex-direction: column;
+
+    gap: 4px;
+}
+
+.detail-label {
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.profile-detail strong {
+    color: #111827;
+    font-size: 14px;
+}
+
+
+/* =========================
+   EDIT BUTTON
+========================= */
+
+.profile-edit-button {
+    width: 100%;
+
+    padding: 13px 18px;
+
+    border: none;
+    border-radius: 11px;
+
+    background: #10b981;
+    color: white;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+.profile-edit-button:hover {
+    background: #059669;
+    transform: translateY(-1px);
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 750px) {
+
+    .profile-details {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+@media (max-width: 500px) {
+
+    .profile-card {
+        padding: 20px;
+    }
+
+    .profile-avatar {
+        width: 58px;
+        height: 58px;
+        font-size: 20px;
+    }
+
+    .profile-main-info h2 {
+        font-size: 20px;
+    }
+
+}

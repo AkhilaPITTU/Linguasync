@@ -94,6 +94,9 @@ async def join_meeting(
     user_name: str,
     language: str
 ):
+    print("\n========== JOIN MEETING ==========")
+    print("Meeting ID:", meeting_id)
+    print("User ID:", user_id)
 
     meeting = await meetings_collection.find_one(
         {
@@ -101,6 +104,8 @@ async def join_meeting(
             "status": "active"
         }
     )
+
+    print("Meeting Found:", meeting)
 
     if not meeting:
         return {
@@ -125,7 +130,7 @@ async def join_meeting(
             "speaking": False
         }
 
-        await meetings_collection.update_one(
+        result = await meetings_collection.update_one(
             {"meeting_id": meeting_id},
             {
                 "$push": {
@@ -133,6 +138,15 @@ async def join_meeting(
                 }
             }
         )
+
+        print("Modified Count:", result.modified_count)
+
+    updated_meeting = await meetings_collection.find_one(
+        {"meeting_id": meeting_id}
+    )
+
+    print("Participants After Join:")
+    print(updated_meeting["participants"])
 
     return {
         "success": True,

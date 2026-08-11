@@ -6,11 +6,26 @@ class AudioService {
         this.stream = null;
         this.isRecording = false;
 
+        this.chunkIntervalMs = 5000;
+        this.intervalId = null;
+        this.onChunk = null;
+        this.mimeType = "audio/webm";
+
     }
 
     // ==========================================
     // START RECORDING
     // ==========================================
+    //
+    // A single MediaRecorder running in timeslice mode only produces
+    // one *complete*, independently-decodable file: the very first
+    // chunk. Every chunk after that is a headerless continuation
+    // fragment, so handing each one to ffmpeg/Whisper on the backend
+    // as if it were a standalone file fails for every chunk past the
+    // first. To keep every chunk self-contained, we instead start a
+    // brand new MediaRecorder on the same stream every interval,
+    // stop it (which flushes one full WebM file), and immediately
+    // start the next one.
 
     async startRecording(onChunk) {
 
@@ -19,80 +34,32 @@ class AudioService {
             return;
         }
 
+        this.onChunk = onChunk;
+
         try {
 
             this.stream = await navigator.mediaDevices.getUserMedia({
                 audio: true
             });
 
-            // Use a supported MIME type
-            let mimeType = "audio/webm";
-
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = "";
+            if (!MediaRecorder.isTypeSupported(this.mimeType)) {
+                this.mimeType = "";
             }
 
-            this.mediaRecorder = mimeType
-                ? new MediaRecorder(this.stream, { mimeType })
-                : new MediaRecorder(this.stream);
+            this.isRecording = true;
 
-            this.mediaRecorder.onstart = () => {
+            this._recordCycle();
 
-                console.log("🎤 Recording Started");
+            this.intervalId = setInterval(() => {
 
-                this.isRecording = true;
-
-            };
-
-            this.mediaRecorder.ondataavailable = async (event) => {
-
-                if (!this.isRecording) {
-                    return;
+                if (
+                    this.mediaRecorder &&
+                    this.mediaRecorder.state !== "inactive"
+                ) {
+                    this.mediaRecorder.stop();
                 }
 
-                if (!event.data || event.data.size === 0) {
-                    return;
-                }
-
-                try {
-
-                    const arrayBuffer =
-                        await event.data.arrayBuffer();
-
-                    if (typeof onChunk === "function") {
-                        onChunk(arrayBuffer);
-                    }
-
-                } catch (error) {
-
-                    console.error(
-                        "Error processing audio chunk:",
-                        error
-                    );
-
-                }
-
-            };
-
-            this.mediaRecorder.onerror = (event) => {
-
-                console.error(
-                    "MediaRecorder Error:",
-                    event.error || event
-                );
-
-            };
-
-            this.mediaRecorder.onstop = () => {
-
-                console.log("🛑 Recording Stopped");
-
-                this.isRecording = false;
-
-            };
-
-            // Generate one chunk every second
-            this.mediaRecorder.start(5000);
+            }, this.chunkIntervalMs);
 
         } catch (error) {
 
@@ -107,6 +74,75 @@ class AudioService {
 
     }
 
+    // Starts one short-lived MediaRecorder cycle. When it stops
+    // (either from our interval timer or from stopRecording()),
+    // it hands back exactly one complete WebM blob and, if we're
+    // still supposed to be recording, immediately starts the next
+    // cycle so capture stays continuous from the user's perspective.
+
+    _recordCycle() {
+
+        if (!this.isRecording || !this.stream) {
+            return;
+        }
+
+        this.mediaRecorder = this.mimeType
+            ? new MediaRecorder(this.stream, { mimeType: this.mimeType })
+            : new MediaRecorder(this.stream);
+
+        const chunks = [];
+
+        this.mediaRecorder.ondataavailable = (event) => {
+
+            if (event.data && event.data.size > 0) {
+                chunks.push(event.data);
+            }
+
+        };
+
+        this.mediaRecorder.onerror = (event) => {
+
+            console.error(
+                "MediaRecorder Error:",
+                event.error || event
+            );
+
+        };
+
+        this.mediaRecorder.onstop = async () => {
+
+            if (chunks.length > 0) {
+
+                try {
+
+                    const blob = new Blob(chunks, { type: this.mimeType });
+                    const arrayBuffer = await blob.arrayBuffer();
+
+                    if (typeof this.onChunk === "function") {
+                        this.onChunk(arrayBuffer);
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "Error processing audio chunk:",
+                        error
+                    );
+
+                }
+
+            }
+
+            if (this.isRecording) {
+                this._recordCycle();
+            }
+
+        };
+
+        this.mediaRecorder.start();
+
+    }
+
     // ==========================================
     // STOP RECORDING
     // ==========================================
@@ -115,21 +151,22 @@ class AudioService {
 
         this.isRecording = false;
 
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+
         if (
             this.mediaRecorder &&
             this.mediaRecorder.state !== "inactive"
         ) {
-
             this.mediaRecorder.stop();
-
         }
 
         if (this.stream) {
 
             this.stream.getTracks().forEach(track => {
-
                 track.stop();
-
             });
 
             this.stream = null;
@@ -137,6 +174,7 @@ class AudioService {
         }
 
         this.mediaRecorder = null;
+        this.onChunk = null;
 
     }
 

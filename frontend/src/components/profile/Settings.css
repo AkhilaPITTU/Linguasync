@@ -1,0 +1,189 @@
+.settings-page {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+
+/* =========================
+   HEADER
+========================= */
+
+.settings-header {
+    margin-bottom: 22px;
+}
+
+.settings-header h2 {
+    margin: 0;
+
+    font-size: 25px;
+    color: #111827;
+}
+
+.settings-header p {
+    margin: 6px 0 0;
+
+    color: #6b7280;
+    font-size: 14px;
+}
+
+
+/* =========================
+   SECTION
+========================= */
+
+.settings-section {
+    margin-bottom: 18px;
+
+    padding: 22px;
+
+    background: #ffffff;
+
+    border: 1px solid #e5e7eb;
+    border-radius: 18px;
+
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.04);
+}
+
+.settings-section-title {
+    display: flex;
+    align-items: center;
+
+    gap: 13px;
+
+    margin-bottom: 8px;
+}
+
+.settings-section-title > span {
+    width: 42px;
+    height: 42px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 11px;
+
+    background: #ecfdf5;
+
+    font-size: 19px;
+}
+
+.settings-section-title h3 {
+    margin: 0;
+
+    font-size: 16px;
+    color: #111827;
+}
+
+.settings-section-title p {
+    margin: 4px 0 0;
+
+    color: #6b7280;
+    font-size: 12px;
+}
+
+
+/* =========================
+   SETTING ITEM
+========================= */
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 20px;
+
+    padding: 18px 0;
+
+    border-top: 1px solid #f0f1f3;
+}
+
+.setting-item:first-of-type {
+    margin-top: 12px;
+}
+
+.setting-text {
+    flex: 1;
+}
+
+.setting-text h4 {
+    margin: 0;
+
+    color: #111827;
+    font-size: 14px;
+}
+
+.setting-text p {
+    margin: 5px 0 0;
+
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+
+/* =========================
+   TOGGLE
+========================= */
+
+.setting-toggle {
+    position: relative;
+
+    width: 48px;
+    height: 26px;
+
+    flex-shrink: 0;
+
+    border: none;
+    border-radius: 20px;
+
+    background: #d1d5db;
+
+    cursor: pointer;
+
+    transition: 0.2s;
+}
+
+.setting-toggle.active {
+    background: #10b981;
+}
+
+.toggle-circle {
+    position: absolute;
+
+    top: 3px;
+    left: 3px;
+
+    width: 20px;
+    height: 20px;
+
+    border-radius: 50%;
+
+    background: white;
+
+    transition: 0.2s;
+
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.setting-toggle.active .toggle-circle {
+    transform: translateX(22px);
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 600px) {
+
+    .settings-section {
+        padding: 18px;
+    }
+
+    .setting-item {
+        align-items: flex-start;
+    }
+
+}

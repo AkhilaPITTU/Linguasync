@@ -1,233 +1,477 @@
-/* ==========================================
-ACTIVE COMMUNICATION
-========================================== */
+/* =====================================================
+   ACTIVE COMMUNICATION
+===================================================== */
 
-.active-card{
-
-    background:#111C2F;
-
-    border-radius:24px;
-
-    padding:25px;
-
-    border:1px solid rgba(255,255,255,.05);
-
-    display:flex;
-
-    flex-direction:column;
-
-    gap:22px;
-
-    transition:.35s;
-
+.active-communication {
+    width: 100%;
+    box-sizing: border-box;
+    color: #ffffff;
 }
 
-.active-card:hover{
 
-    transform:translateY(-6px);
+/* =====================================================
+   COMMON CARD
+===================================================== */
 
-    box-shadow:0 18px 35px rgba(124,58,237,.18);
+.communication-card {
+    width: 100%;
+    box-sizing: border-box;
 
+    padding: 24px;
+
+    background: #111c30;
+
+    border: 1px solid #24334d;
+
+    border-radius: 18px;
+
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+
+    color: #ffffff;
 }
 
-/* ========================================== */
 
-.active-header{
+/* =====================================================
+   CARD HEADER
+===================================================== */
 
-    display:flex;
+.communication-card-header {
+    display: flex;
+    align-items: center;
 
-    justify-content:space-between;
+    gap: 16px;
 
-    align-items:center;
-
+    margin-bottom: 22px;
 }
 
-.live-status{
+.communication-card-header h3 {
+    margin: 0 0 5px;
 
-    background:#22C55E;
+    font-size: 20px;
+    font-weight: 600;
 
-    color:white;
-
-    padding:8px 16px;
-
-    border-radius:30px;
-
-    font-size:13px;
-
-    font-weight:600;
-
+    color: #ffffff;
 }
 
-.call-time{
+.communication-card-header p {
+    margin: 0;
 
-    display:flex;
+    font-size: 13px;
 
-    align-items:center;
-
-    gap:8px;
-
-    color:#CBD5E1;
-
+    color: #8fa3c7;
 }
 
-/* ========================================== */
 
-.participant{
+/* =====================================================
+   ICON
+===================================================== */
 
-    display:flex;
+.communication-icon {
+    width: 58px;
+    height: 58px;
 
-    align-items:center;
+    min-width: 58px;
 
-    gap:15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
+    border-radius: 16px;
+
+    font-size: 26px;
+
+    background: #263451;
+
+    color: #ffffff;
 }
 
-.participant img{
-
-    width:70px;
-
-    height:70px;
-
-    border-radius:50%;
-
-    border:3px solid #7C3AED;
-
+.video-icon {
+    background: #2563eb;
 }
 
-.participant h3{
-
-    color:white;
-
+.incoming-icon {
+    background: #7c3aed;
 }
 
-.participant p{
 
-    color:#94A3B8;
+/* =====================================================
+   DETAILS
+===================================================== */
 
+.communication-details {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+
+    gap: 12px;
+
+    margin-bottom: 18px;
 }
 
-/* ========================================== */
+.communication-detail {
+    display: flex;
+    align-items: center;
 
-.communication-info{
+    gap: 8px;
 
-    display:flex;
+    padding: 9px 12px;
 
-    flex-direction:column;
+    border-radius: 9px;
 
-    gap:16px;
+    background: #18263e;
 
+    color: #b3c2da;
+
+    font-size: 13px;
 }
 
-.communication-info div{
+.communication-detail svg {
+    color: #8c5cff;
 
-    display:flex;
-
-    justify-content:space-between;
-
-    align-items:center;
-
+    font-size: 16px;
 }
 
-.communication-info span{
 
-    color:#94A3B8;
+/* =====================================================
+   STATUS
+===================================================== */
 
+.communication-status {
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+
+    margin-bottom: 18px;
+
+    color: #22c55e;
+
+    font-size: 13px;
+    font-weight: 500;
 }
 
-.communication-info strong{
+.status-dot {
+    width: 8px;
+    height: 8px;
 
-    color:white;
+    border-radius: 50%;
 
-    display:flex;
+    background: #22c55e;
 
-    align-items:center;
-
-    gap:8px;
-
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
 }
 
-.running{
 
-    color:#22C55E !important;
+/* =====================================================
+   PRIMARY BUTTON
+===================================================== */
 
-}
+.communication-primary-btn {
+    width: 100%;
 
-/* ========================================== */
+    height: 46px;
 
-.control-buttons{
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
-    display:flex;
+    gap: 9px;
 
-    justify-content:center;
+    border: none;
 
-    gap:18px;
+    border-radius: 11px;
 
-}
-
-.control-buttons button{
-
-    width:55px;
-
-    height:55px;
-
-    border:none;
-
-    border-radius:18px;
-
-    background:#1A2745;
-
-    color:white;
-
-    cursor:pointer;
-
-    font-size:20px;
-
-    transition:.3s;
-
-}
-
-.control-buttons button:hover{
-
-    background:#7C3AED;
-
-}
-
-/* ========================================== */
-
-.join-button{
-
-    border:none;
-
-    border-radius:16px;
-
-    padding:16px;
-
-    background:linear-gradient(
+    background: linear-gradient(
         135deg,
-        #7C3AED,
-        #2563EB
+        #7c3aed,
+        #5b21b6
     );
 
-    color:white;
+    color: #ffffff;
 
-    cursor:pointer;
+    font-size: 14px;
+    font-weight: 600;
 
-    display:flex;
+    cursor: pointer;
 
-    justify-content:center;
+    transition: 0.2s ease;
+}
 
-    align-items:center;
+.communication-primary-btn:hover {
+    transform: translateY(-1px);
 
-    gap:12px;
+    box-shadow:
+        0 8px 20px rgba(124, 58, 237, 0.3);
+}
 
-    font-size:16px;
 
-    transition:.35s;
+/* =====================================================
+   INCOMING USER
+===================================================== */
+
+.incoming-user {
+    display: flex;
+    align-items: center;
+
+    gap: 13px;
+
+    margin-bottom: 20px;
+
+    padding: 13px;
+
+    background: #17243a;
+
+    border: 1px solid #263754;
+
+    border-radius: 12px;
+}
+
+.incoming-avatar {
+    width: 46px;
+    height: 46px;
+
+    min-width: 46px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: linear-gradient(
+        135deg,
+        #7c3aed,
+        #2563eb
+    );
+
+    color: #ffffff;
+
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.incoming-user-info {
+    display: flex;
+    flex-direction: column;
+
+    gap: 4px;
+}
+
+.incoming-user-info strong {
+    color: #ffffff;
+
+    font-size: 15px;
+}
+
+.incoming-user-info span {
+    color: #8fa3c7;
+
+    font-size: 12px;
+}
+
+
+/* =====================================================
+   MEETING ID
+===================================================== */
+
+.invitation-meeting-id {
+    padding: 8px 10px;
+
+    background: #0c1628;
+
+    border: 1px solid #1e2c45;
+
+    border-radius: 7px;
+
+    color: #7f93b5;
+
+    font-family: monospace;
+}
+
+
+/* =====================================================
+   INCOMING ACTIONS
+===================================================== */
+
+.incoming-call-actions {
+    display: flex;
+
+    gap: 12px;
+
+    width: 100%;
+}
+
+.accept-call-btn,
+.reject-call-btn {
+    flex: 1;
+
+    height: 44px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    border: none;
+
+    border-radius: 10px;
+
+    color: #ffffff;
+
+    font-size: 14px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: 0.2s ease;
+}
+
+.accept-call-btn {
+    background: #16a34a;
+}
+
+.accept-call-btn:hover {
+    background: #15803d;
+
+    transform: translateY(-1px);
+}
+
+.reject-call-btn {
+    background: #dc2626;
+}
+
+.reject-call-btn:hover {
+    background: #b91c1c;
+
+    transform: translateY(-1px);
+}
+
+.accept-call-btn:disabled,
+.reject-call-btn:disabled {
+    opacity: 0.5;
+
+    cursor: not-allowed;
+
+    transform: none;
+}
+
+
+/* =====================================================
+   NO CALL
+===================================================== */
+
+.no-call-card {
+    min-height: 145px;
+
+    display: flex;
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+
+    padding: 30px;
+}
+
+.no-call-card .communication-icon {
+    width: 52px;
+    height: 52px;
+
+    margin-bottom: 14px;
+
+    background: #1c2940;
+
+    color: #7185a8;
+
+    font-size: 22px;
+}
+
+.no-call-card h3 {
+    margin: 0 0 7px;
+
+    color: #ffffff;
+
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.no-call-card p {
+    margin: 0;
+
+    max-width: 400px;
+
+    color: #8fa3c7;
+
+    font-size: 13px;
+
+    line-height: 1.5;
+}
+
+
+/* =====================================================
+   LOADING
+===================================================== */
+
+.communication-loading {
+    min-height: 145px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #111c30;
+
+    border: 1px solid #24334d;
+
+    border-radius: 18px;
+
+    color: #8fa3c7;
+
+    font-size: 14px;
+}
+
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 800px) {
+
+    .communication-card {
+        padding: 18px;
+    }
+
+    .communication-details {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .communication-detail {
+        width: 100%;
+        box-sizing: border-box;
+    }
 
 }
 
-.join-button:hover{
 
-    transform:translateY(-4px);
+@media (max-width: 500px) {
+
+    .communication-card-header {
+        align-items: flex-start;
+    }
+
+    .communication-card-header h3 {
+        font-size: 17px;
+    }
+
+    .communication-card-header p {
+        font-size: 12px;
+    }
+
+    .incoming-call-actions {
+        flex-direction: column;
+    }
 
 }
