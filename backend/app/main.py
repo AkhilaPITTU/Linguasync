@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config.database import client
 from app.config.settings import settings
@@ -87,6 +88,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.mount(
+    "/generated_audio",
+    StaticFiles(directory="generated_audio"),
+    name="generated_audio",
+)
+
 # ==========================================
 # CORS
 # ==========================================
@@ -94,8 +101,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        settings.FRONTEND_URL
+        settings.FRONTEND_URL,
     ],
+    allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(?::\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

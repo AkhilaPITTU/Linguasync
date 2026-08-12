@@ -464,7 +464,9 @@ async def pending_invitations_service(
 # =========================================================
 
 async def accept_invitation_service(
-    invitation_id: str
+    invitation_id: str,
+    preferred_language: str,
+    output_mode: str,
 ):
 
     print(
@@ -699,7 +701,13 @@ async def accept_invitation_service(
                 user_name,
 
             "language":
-                "English",
+                preferred_language,
+
+            "preferred_language":
+                preferred_language,
+
+            "output_mode":
+                output_mode,
 
             "mic_enabled":
                 True,

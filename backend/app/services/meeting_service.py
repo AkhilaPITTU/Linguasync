@@ -44,6 +44,8 @@ async def create_meeting(
                 "user_id": host_id,
                 "user_name": host_name,
                 "language": preferred_language,
+                "preferred_language": preferred_language,
+                "output_mode": output_mode,
                 "mic_enabled": True,
                 "camera_enabled": True,
                 "screen_share": False,
@@ -92,7 +94,8 @@ async def join_meeting(
     meeting_id: str,
     user_id: str,
     user_name: str,
-    language: str
+    preferred_language: str,
+    output_mode: str,
 ):
     print("\n========== JOIN MEETING ==========")
     print("Meeting ID:", meeting_id)
@@ -118,17 +121,20 @@ async def join_meeting(
         for participant in meeting["participants"]
     )
 
-    if not exists:
+    participant = {
+        "user_id": user_id,
+        "user_name": user_name,
+        # Keep language for existing UI and older meeting records.
+        "language": preferred_language,
+        "preferred_language": preferred_language,
+        "output_mode": output_mode,
+        "mic_enabled": True,
+        "camera_enabled": True,
+        "screen_share": False,
+        "speaking": False
+    }
 
-        participant = {
-            "user_id": user_id,
-            "user_name": user_name,
-            "language": language,
-            "mic_enabled": True,
-            "camera_enabled": True,
-            "screen_share": False,
-            "speaking": False
-        }
+    if not exists:
 
         result = await meetings_collection.update_one(
             {"meeting_id": meeting_id},
@@ -140,6 +146,23 @@ async def join_meeting(
         )
 
         print("Modified Count:", result.modified_count)
+
+    else:
+        # Invitation acceptance can add the participant before this
+        # idempotent join request. Preserve the selected per-call settings.
+        await meetings_collection.update_one(
+            {
+                "meeting_id": meeting_id,
+                "participants.user_id": user_id,
+            },
+            {
+                "$set": {
+                    "participants.$.language": preferred_language,
+                    "participants.$.preferred_language": preferred_language,
+                    "participants.$.output_mode": output_mode,
+                }
+            }
+        )
 
     updated_meeting = await meetings_collection.find_one(
         {"meeting_id": meeting_id}

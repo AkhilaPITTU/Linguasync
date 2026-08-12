@@ -81,10 +81,15 @@ async def pending_invitations_controller(
 
 
 async def accept_invitation_controller(
-    invitation_id: str
+    invitation_id: str,
+    data,
 ):
 
-    return await accept_invitation_service(invitation_id)
+    return await accept_invitation_service(
+        invitation_id,
+        data.preferred_language,
+        data.output_mode,
+    )
 
 
 async def reject_invitation_controller(

@@ -1,3 +1,5 @@
+import { WEBSOCKET_BASE_URL } from "./apiConfig";
+
 class WebSocketService {
 
     constructor() {
@@ -13,7 +15,9 @@ class WebSocketService {
             }
 
             const wsUrl =
-                `ws://localhost:8000/ws/meeting/${meetingId}/${userId}`;
+                `${WEBSOCKET_BASE_URL}/ws/meeting/${meetingId}/${userId}`;
+
+            console.log("WebSocket connecting:", wsUrl);
 
             this.socket = new WebSocket(wsUrl);
 

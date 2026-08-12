@@ -5,6 +5,14 @@ const VideoTile = ({ participant }) => {
 
     const videoRef = useRef(null);
 
+    const hasVideo =
+        participant.stream &&
+        participant.stream.getVideoTracks().length > 0;
+
+    const hasAudio =
+        participant.stream &&
+        participant.stream.getAudioTracks().length > 0;
+
     useEffect(() => {
 
         const video = videoRef.current;
@@ -32,76 +40,47 @@ const VideoTile = ({ participant }) => {
         );
 
         console.log(
-            "Remote Stream:",
-            participant.stream
+            "Has Video:",
+            hasVideo
         );
 
-
-        // ==========================================
-        // CHECK AUDIO TRACKS
-        // ==========================================
+        console.log(
+            "Has Audio:",
+            hasAudio
+        );
 
         const audioTracks =
             participant.stream.getAudioTracks();
+
+        const videoTracks =
+            participant.stream.getVideoTracks();
 
         console.log(
             "AUDIO TRACKS:",
             audioTracks
         );
 
-        audioTracks.forEach((track) => {
-
-            console.log(
-                "AUDIO TRACK:",
-                {
-                    enabled: track.enabled,
-                    muted: track.muted,
-                    readyState: track.readyState
-                }
-            );
-
-        });
-
-
-        // ==========================================
-        // CHECK VIDEO TRACKS
-        // ==========================================
-
-        const videoTracks =
-            participant.stream.getVideoTracks();
-
         console.log(
             "VIDEO TRACKS:",
             videoTracks
         );
 
-
         // ==========================================
-        // ATTACH WEBRTC STREAM
+        // ATTACH STREAM
         // ==========================================
 
         video.srcObject =
             participant.stream;
 
-
-        // ==========================================
-        // LOCAL VIDEO = MUTED
-        // REMOTE VIDEO = SOUND ENABLED
-        // ==========================================
-
+        // Local participant should not hear
+        // their own microphone.
         video.muted =
             Boolean(participant.local);
 
-
-        // ==========================================
-        // SET VOLUME
-        // ==========================================
-
         video.volume = 1.0;
 
-
         // ==========================================
-        // PLAY VIDEO + AUDIO
+        // PLAY AUDIO / VIDEO
         // ==========================================
 
         const startPlayback = async () => {
@@ -111,14 +90,14 @@ const VideoTile = ({ participant }) => {
                 await video.play();
 
                 console.log(
-                    "✅ Video/Audio playback started:",
+                    "✅ Audio/Video playback started:",
                     participant.name
                 );
 
             } catch (error) {
 
                 console.warn(
-                    "⚠️ Video/Audio playback failed:",
+                    "⚠️ Playback failed:",
                     error
                 );
 
@@ -128,9 +107,8 @@ const VideoTile = ({ participant }) => {
 
         startPlayback();
 
-
         // ==========================================
-        // AUDIO TRACK STATE CHANGES
+        // AUDIO TRACK EVENTS
         // ==========================================
 
         audioTracks.forEach((track) => {
@@ -138,7 +116,7 @@ const VideoTile = ({ participant }) => {
             track.onunmute = () => {
 
                 console.log(
-                    "🔊 Remote audio unmuted:",
+                    "🔊 Audio unmuted:",
                     participant.name
                 );
 
@@ -149,7 +127,7 @@ const VideoTile = ({ participant }) => {
             track.onmute = () => {
 
                 console.log(
-                    "🔇 Remote audio muted:",
+                    "🔇 Audio muted:",
                     participant.name
                 );
 
@@ -158,7 +136,7 @@ const VideoTile = ({ participant }) => {
             track.onended = () => {
 
                 console.log(
-                    "❌ Remote audio ended:",
+                    "❌ Audio ended:",
                     participant.name
                 );
 
@@ -166,6 +144,42 @@ const VideoTile = ({ participant }) => {
 
         });
 
+        // ==========================================
+        // VIDEO TRACK EVENTS
+        // ==========================================
+
+        videoTracks.forEach((track) => {
+
+            track.onunmute = () => {
+
+                console.log(
+                    "📹 Video unmuted:",
+                    participant.name
+                );
+
+                startPlayback();
+
+            };
+
+            track.onmute = () => {
+
+                console.log(
+                    "📹 Video muted:",
+                    participant.name
+                );
+
+            };
+
+            track.onended = () => {
+
+                console.log(
+                    "❌ Video ended:",
+                    participant.name
+                );
+
+            };
+
+        });
 
         // ==========================================
         // CLEANUP
@@ -181,14 +195,137 @@ const VideoTile = ({ participant }) => {
 
             });
 
+            videoTracks.forEach((track) => {
+
+                track.onunmute = null;
+                track.onmute = null;
+                track.onended = null;
+
+            });
+
         };
 
     }, [
         participant.stream,
         participant.local,
-        participant.name
+        participant.name,
+        hasVideo,
+        hasAudio
     ]);
 
+    // ==========================================
+    // AUDIO CALL
+    // ==========================================
+
+    if (participant.stream && !hasVideo) {
+
+        return (
+
+            <div
+                className={`video-tile audio-tile ${
+                    participant.local
+                        ? "you-border"
+                        : ""
+                }`}
+            >
+
+                <div className="audio-avatar">
+
+                    <div className="avatar">
+
+                        {participant.name
+                            ? participant.name
+                                .charAt(0)
+                                .toUpperCase()
+                            : "?"
+                        }
+
+                    </div>
+
+                    <div className="audio-icon">
+                        🎤
+                    </div>
+
+                </div>
+
+                {/* PARTICIPANT INFORMATION */}
+
+                <div className="tile-header">
+
+                    <div className="participant-info">
+
+                        <span className="country">
+                            {participant.country || "🌍"}
+                        </span>
+
+                        <span className="participant-name">
+                            {participant.name}
+                        </span>
+
+                        {participant.local && (
+
+                            <span className="you-badge">
+                                You
+                            </span>
+
+                        )}
+
+                        <span className="language-badge">
+                            {participant.language || "English"}
+                        </span>
+
+                    </div>
+
+                    {participant.speaking && (
+
+                        <div className="speaking-indicator">
+
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+
+                        </div>
+
+                    )}
+
+                </div>
+
+                {/* SUBTITLE */}
+
+                {participant.subtitle && (
+
+                    <div className="subtitle-box">
+
+                        <p>
+                            {participant.subtitle}
+                        </p>
+
+                    </div>
+
+                )}
+
+                {/* Hidden audio/video element.
+                    It keeps remote audio playing. */}
+
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted={participant.local}
+                    style={{
+                        display: "none"
+                    }}
+                />
+
+            </div>
+
+        );
+    }
+
+    // ==========================================
+    // VIDEO CALL
+    // ==========================================
 
     return (
 
@@ -229,7 +366,6 @@ const VideoTile = ({ participant }) => {
 
             )}
 
-
             {/* ======================================
                 PARTICIPANT INFORMATION
             ====================================== */}
@@ -260,10 +396,7 @@ const VideoTile = ({ participant }) => {
 
                 </div>
 
-
-                {/* ==================================
-                    SPEAKING INDICATOR
-                ================================== */}
+                {/* SPEAKING INDICATOR */}
 
                 {participant.speaking && (
 
@@ -279,7 +412,6 @@ const VideoTile = ({ participant }) => {
                 )}
 
             </div>
-
 
             {/* ======================================
                 SUBTITLE
@@ -300,6 +432,7 @@ const VideoTile = ({ participant }) => {
         </div>
 
     );
+
 };
 
 export default VideoTile;

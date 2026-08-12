@@ -29,7 +29,7 @@ const TranscriptPanel = ({ transcript = [] }) => {
 
                             <div
                                 className="transcript-card"
-                                key={item.id || index}
+                                key={item.chunk_id || item.id || index}
                             >
 
                                 <div className="transcript-top">
@@ -45,6 +45,7 @@ const TranscriptPanel = ({ transcript = [] }) => {
                                         <strong>
 
                                             {item.speaker ||
+                                             item.user_name ||
                                              item.name ||
                                              "Unknown"}
 

@@ -16,6 +16,10 @@ class Participant(BaseModel):
 
     language: str
 
+    preferred_language: str = "English"
+
+    output_mode: str = "none"
+
     mic_enabled: bool = True
 
     camera_enabled: bool = True
