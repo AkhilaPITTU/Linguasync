@@ -25,78 +25,139 @@ import {
     leaveMeeting as leaveMeetingAPI
 } from "../../services/meetingService";
 
-// NOTE: "Add Participants" no longer navigates to a separate route.
-// Navigating away used to unmount MeetingRoom, whose cleanup effect
-// stops the local camera/mic tracks and tears down the websocket +
-// peer connections -- which looked like your video "muting itself"
-// right after inviting someone. Now it just calls onAddParticipants
-// (passed down from MeetingRoom), which opens an in-call modal
-// instead, so MeetingRoom stays mounted the whole time.
-
-const BottomControls = ({ onAddParticipants }) => {
+const BottomControls = ({
+    onAddParticipants,
+    meetingType = "video"
+}) => {
 
     const navigate = useNavigate();
 
+    const isAudioCall =
+        meetingType?.toLowerCase() === "audio";
+
+    const isVideoCall =
+        !isAudioCall;
+
     const [micOn, setMicOn] = useState(true);
-    const [cameraOn, setCameraOn] = useState(true);
-    const [speakerOn, setSpeakerOn] = useState(true);
 
-    const meetingId = window.location.pathname.split("/").pop();
-    const userId = localStorage.getItem("user_id");
+    const [cameraOn, setCameraOn] =
+        useState(isVideoCall);
 
-    // ==========================
-    // Toggle Microphone
-    // ==========================
+    const [speakerOn, setSpeakerOn] =
+        useState(true);
+
+    const meetingId =
+        window.location.pathname
+            .split("/")
+            .pop();
+
+    const rawUserId =
+        localStorage.getItem("user_id");
+
+    const userId =
+        rawUserId?.includes(":")
+            ? rawUserId.split(":")[0]
+            : rawUserId;
+
+    // ==========================================
+    // TOGGLE MICROPHONE
+    // ==========================================
 
     const toggleMic = () => {
 
-        const stream = webrtcService.localStream;
+        const stream =
+            webrtcService.localStream;
 
         if (!stream) return;
 
-        stream.getAudioTracks().forEach(track => {
+        const audioTracks =
+            stream.getAudioTracks();
 
-            track.enabled = !track.enabled;
+        if (audioTracks.length === 0) {
+            console.warn(
+                "No audio track available."
+            );
+            return;
+        }
 
-        });
+        const newState =
+            !audioTracks[0].enabled;
 
-        setMicOn(prev => !prev);
+        audioTracks.forEach(
+            (track) => {
+                track.enabled = newState;
+            }
+        );
 
+        setMicOn(newState);
+
+        console.log(
+            "Microphone:",
+            newState ? "ON" : "OFF"
+        );
     };
 
-    // ==========================
-    // Toggle Camera
-    // ==========================
+    // ==========================================
+    // TOGGLE CAMERA
+    // ==========================================
 
     const toggleCamera = () => {
 
-        const stream = webrtcService.localStream;
+        // Camera does not exist in audio calls
+        if (isAudioCall) {
+            console.log(
+                "Camera is disabled for audio calls."
+            );
+            return;
+        }
+
+        const stream =
+            webrtcService.localStream;
 
         if (!stream) return;
 
-        stream.getVideoTracks().forEach(track => {
+        const videoTracks =
+            stream.getVideoTracks();
 
-            track.enabled = !track.enabled;
+        if (videoTracks.length === 0) {
+            console.warn(
+                "No video track available."
+            );
+            return;
+        }
 
-        });
+        const newState =
+            !videoTracks[0].enabled;
 
-        setCameraOn(prev => !prev);
+        videoTracks.forEach(
+            (track) => {
+                track.enabled = newState;
+            }
+        );
 
+        setCameraOn(newState);
+
+        console.log(
+            "Camera:",
+            newState ? "ON" : "OFF"
+        );
     };
 
-    // ==========================
-    // Toggle Speaker
-    // ==========================
+    // ==========================================
+    // TOGGLE SPEAKER
+    // ==========================================
 
     const toggleSpeaker = () => {
 
-        setSpeakerOn(prev => !prev);
+        setSpeakerOn(
+            (prev) => !prev
+        );
 
     };
 
-    // ==========================
-    // Add Participants
-    // ==========================
+    // ==========================================
+    // ADD PARTICIPANTS
+    // ==========================================
 
     const handleAddParticipants = () => {
 
@@ -106,11 +167,9 @@ const BottomControls = ({ onAddParticipants }) => {
 
     };
 
-    // ==========================
-    // Leave Meeting
-    // Backend decides whether to
-    // end meeting or remove user.
-    // ==========================
+    // ==========================================
+    // LEAVE MEETING
+    // ==========================================
 
     const leaveMeeting = async () => {
 
@@ -125,9 +184,7 @@ const BottomControls = ({ onAddParticipants }) => {
 
             }
 
-        }
-
-        catch (error) {
+        } catch (error) {
 
             console.error(
                 "Leave Meeting Error:",
@@ -148,67 +205,102 @@ const BottomControls = ({ onAddParticipants }) => {
 
         <div className="bottom-controls">
 
-            {/* Left Controls */}
+            {/* =================================
+                LEFT CONTROLS
+            ================================= */}
 
             <div className="control-group">
 
+                {/* MICROPHONE */}
+
                 <button
-                    className={`control-btn ${micOn ? "active" : ""}`}
+                    className={`control-btn ${
+                        micOn ? "active" : ""
+                    }`}
                     onClick={toggleMic}
-                    title="Microphone"
+                    title={
+                        micOn
+                            ? "Mute Microphone"
+                            : "Unmute Microphone"
+                    }
                 >
 
-                    {
-                        micOn
-                            ? <FaMicrophone />
-                            : <FaMicrophoneSlash />
+                    {micOn
+                        ? <FaMicrophone />
+                        : <FaMicrophoneSlash />
                     }
 
                 </button>
 
-                <button
-                    className={`control-btn ${cameraOn ? "active" : ""}`}
-                    onClick={toggleCamera}
-                    title="Camera"
-                >
+                {/* CAMERA - VIDEO CALL ONLY */}
 
-                    {
-                        cameraOn
+                {isVideoCall && (
+
+                    <button
+                        className={`control-btn ${
+                            cameraOn ? "active" : ""
+                        }`}
+                        onClick={toggleCamera}
+                        title={
+                            cameraOn
+                                ? "Turn Camera Off"
+                                : "Turn Camera On"
+                        }
+                    >
+
+                        {cameraOn
                             ? <FaVideo />
                             : <FaVideoSlash />
-                    }
+                        }
 
-                </button>
+                    </button>
+
+                )}
+
+                {/* SPEAKER */}
 
                 <button
-                    className={`control-btn ${speakerOn ? "active" : ""}`}
+                    className={`control-btn ${
+                        speakerOn ? "active" : ""
+                    }`}
                     onClick={toggleSpeaker}
-                    title="Speaker"
+                    title={
+                        speakerOn
+                            ? "Mute Speaker"
+                            : "Unmute Speaker"
+                    }
                 >
 
-                    {
-                        speakerOn
-                            ? <FaVolumeUp />
-                            : <FaVolumeMute />
+                    {speakerOn
+                        ? <FaVolumeUp />
+                        : <FaVolumeMute />
                     }
 
                 </button>
 
             </div>
 
-            {/* Center Controls */}
+            {/* =================================
+                CENTER CONTROLS
+            ================================= */}
 
             <div className="control-group">
 
+                {/* ADD PARTICIPANTS */}
+
                 <button
                     className="control-btn"
-                    onClick={handleAddParticipants}
+                    onClick={
+                        handleAddParticipants
+                    }
                     title="Add Participants"
                 >
 
                     <FaUserPlus />
 
                 </button>
+
+                {/* PARTICIPANTS */}
 
                 <button
                     className="control-btn"
@@ -219,6 +311,8 @@ const BottomControls = ({ onAddParticipants }) => {
 
                 </button>
 
+                {/* CHAT */}
+
                 <button
                     className="control-btn"
                     title="Chat"
@@ -227,6 +321,8 @@ const BottomControls = ({ onAddParticipants }) => {
                     <FaComments />
 
                 </button>
+
+                {/* LIVE CAPTIONS */}
 
                 <button
                     className="control-btn"
@@ -237,6 +333,8 @@ const BottomControls = ({ onAddParticipants }) => {
 
                 </button>
 
+                {/* TRANSLATION */}
+
                 <button
                     className="control-btn"
                     title="Translation"
@@ -245,6 +343,8 @@ const BottomControls = ({ onAddParticipants }) => {
                     <FaLanguage />
 
                 </button>
+
+                {/* DOWNLOAD TRANSCRIPT */}
 
                 <button
                     className="control-btn"
@@ -257,7 +357,9 @@ const BottomControls = ({ onAddParticipants }) => {
 
             </div>
 
-            {/* Right Controls */}
+            {/* =================================
+                RIGHT CONTROLS
+            ================================= */}
 
             <div className="control-group">
 
@@ -270,9 +372,7 @@ const BottomControls = ({ onAddParticipants }) => {
                     <FaPhoneSlash />
 
                     <span>
-
                         Leave
-
                     </span>
 
                 </button>
@@ -282,7 +382,6 @@ const BottomControls = ({ onAddParticipants }) => {
         </div>
 
     );
-
 };
 
 export default BottomControls;

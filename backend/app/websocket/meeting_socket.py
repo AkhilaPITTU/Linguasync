@@ -1,4 +1,5 @@
 import asyncio
+from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.websocket.connection_manager import manager
@@ -11,6 +12,7 @@ from app.services.grammar_correction_service import grammar_correction_service
 from app.services.confidence_service import confidence_service
 from app.services.human_review_service import human_review_service
 from app.services.ai_feedback_service import ai_feedback_service
+from app.services.text_to_speech_service import text_to_speech_service
 
 router = APIRouter()
 
@@ -25,7 +27,18 @@ LANGUAGE_MAP = {
     "Malayalam": "ml",
     "French": "fr",
     "German": "de",
-    "Spanish": "es"
+    "Spanish": "es",
+    "Bengali": "bn",
+    "Marathi": "mr",
+    "Gujarati": "gu",
+    "Punjabi": "pa",
+    "Urdu": "ur",
+    "Italian": "it",
+    "Portuguese": "pt",
+    "Russian": "ru",
+    "Chinese": "zh",
+    "Japanese": "ja",
+    "Korean": "ko",
 }
 
 # How many audio_stream chunks we'll let queue up per connection
@@ -44,6 +57,44 @@ def _get_user_name(meeting: dict, user_id: str) -> str:
     return "Participant"
 
 
+def _normalize_output_mode(mode: str) -> str:
+    """Support existing meeting modes while using per-call preferences."""
+    return {
+        "original": "none",
+        "text": "subtitle",
+        "speech": "voice",
+        "translated_speech": "voice",
+        "text_speech": "subtitle_voice",
+    }.get(mode, mode if mode in {
+        "none", "subtitle", "voice", "subtitle_voice"
+    } else "none")
+
+
+def _get_participant(meeting: dict, user_id: str) -> dict:
+    for participant in meeting.get("participants", []):
+        if participant.get("user_id") == user_id:
+            return participant
+    return {}
+
+
+def _connected_participants(meeting: dict, meeting_id: str) -> list:
+    """Return persisted preference data for users connected to this room."""
+    participants = []
+    for connected_user_id in manager.get_participants(meeting_id):
+        participant = _get_participant(meeting, connected_user_id)
+        participants.append({
+            "user_id": connected_user_id,
+            "user_name": participant.get("user_name", "Participant"),
+            "preferred_language": participant.get(
+                "preferred_language", participant.get("language", "English")
+            ),
+            "output_mode": _normalize_output_mode(
+                participant.get("output_mode", "none")
+            ),
+        })
+    return participants
+
+
 async def _process_audio_chunk(meeting_id: str, user_id: str, data: dict):
     """
     Runs the full audio pipeline for a single chunk: noise check,
@@ -54,6 +105,7 @@ async def _process_audio_chunk(meeting_id: str, user_id: str, data: dict):
     directly inside the message-receive loop.
     """
     try:
+        chunk_id = str(uuid4())
         audio_bytes = bytes(data.get("audio", []))
 
         noise_result = await asyncio.to_thread(
@@ -83,6 +135,30 @@ async def _process_audio_chunk(meeting_id: str, user_id: str, data: dict):
         detected_language = transcript_result.get("language", "en")
         whisper_confidence = transcript_result.get("confidence", 0)
 
+        grammar_result = await asyncio.to_thread(
+            grammar_correction_service.correct,
+            transcript
+        )
+        transcript = grammar_result["corrected_text"]
+        grammar_modified = grammar_result["modified"]
+
+        # Deliver captions as soon as transcription and grammar cleanup
+        # complete. Translation, feedback persistence, and quality scoring
+        # continue below without delaying the live transcript UI.
+        await manager.broadcast(
+            meeting_id,
+            {
+                "type": "transcript",
+                "chunk_id": chunk_id,
+                "user_id": user_id,
+                "user_name": data.get("user_name", "Participant"),
+                "text": transcript,
+                "language": detected_language,
+                "confidence": whisper_confidence,
+                "grammar_corrected": grammar_modified,
+            }
+        )
+
         speech_result = await asyncio.to_thread(
             speech_accuracy_service.analyze,
             transcript,
@@ -90,13 +166,6 @@ async def _process_audio_chunk(meeting_id: str, user_id: str, data: dict):
         )
         speech_accuracy = speech_result["accuracy"]
         speech_status = speech_result["status"]
-
-        grammar_result = await asyncio.to_thread(
-            grammar_correction_service.correct,
-            transcript
-        )
-        transcript = grammar_result["corrected_text"]
-        grammar_modified = grammar_result["modified"]
 
         confidence_result = await asyncio.to_thread(
             confidence_service.calculate,
@@ -120,49 +189,71 @@ async def _process_audio_chunk(meeting_id: str, user_id: str, data: dict):
         # ------------------------------------------
         participants_doc = await meetings_collection.find_one(
             {"meeting_id": meeting_id},
-            {"_id": 0, "participants": 1}
+            {"_id": 0, "participants": 1, "output_mode": 1}
         )
         meeting_participants = (
             participants_doc.get("participants", [])
             if participants_doc else []
         )
 
-        recipient_languages = {}
+        default_output_mode = _normalize_output_mode(
+            (participants_doc or {}).get("output_mode", "none")
+        )
+
+        recipient_preferences = {}
         for participant in meeting_participants:
             recipient_id = participant.get("user_id")
             if not recipient_id:
                 continue
-            recipient_languages[recipient_id] = participant.get(
-                "language", "English"
-            )
+            recipient_preferences[recipient_id] = {
+                "preferred_language": participant.get(
+                    "preferred_language",
+                    participant.get("language", "English")
+                ),
+                "output_mode": _normalize_output_mode(
+                    participant.get("output_mode", default_output_mode)
+                ),
+            }
 
-        if user_id not in recipient_languages:
-            recipient_languages[user_id] = "English"
+        if user_id not in recipient_preferences:
+            recipient_preferences[user_id] = {
+                "preferred_language": "English",
+                "output_mode": default_output_mode,
+            }
 
-        # Translate once per unique target language, in parallel
-        # instead of one-at-a-time -- these calls are independent of
-        # each other so there's no reason to serialize them.
-        unique_languages = list(set(recipient_languages.values()))
+        # Translate only for recipients who requested translated output.
+        # Each unique target language is still translated once in parallel.
+        unique_languages = list({
+            preference["preferred_language"]
+            for preference in recipient_preferences.values()
+            if preference["output_mode"] != "none"
+        })
 
         async def _translate_for(lang_name):
             target_lang_code = LANGUAGE_MAP.get(lang_name, "en")
-            translated = await asyncio.to_thread(
+            translation_result = await asyncio.to_thread(
                 translation_service.translate,
                 transcript,
                 source_lang=detected_language,
                 target_lang=target_lang_code
             )
-            return lang_name, translated
+            return lang_name, translation_result
 
         translation_pairs = await asyncio.gather(
             *[_translate_for(lang) for lang in unique_languages]
         )
         translated_by_language = dict(translation_pairs)
 
-        speaker_language = recipient_languages.get(user_id, "English")
-        canonical_translated_text = translated_by_language.get(
-            speaker_language, transcript
+        speaker_language = recipient_preferences[user_id][
+            "preferred_language"
+        ]
+        speaker_translation = translated_by_language.get(
+            speaker_language,
+            {"success": False},
         )
+        canonical_translated_text = speaker_translation.get(
+            "translated_text"
+        ) or transcript
 
         feedback = await ai_feedback_service.save_feedback(
             meeting_id=meeting_id,
@@ -186,35 +277,58 @@ async def _process_audio_chunk(meeting_id: str, user_id: str, data: dict):
             }
         )
 
-        await manager.broadcast(
-            meeting_id,
-            {
-                "type": "transcript",
-                "user_id": user_id,
-                "text": transcript,
-                "language": detected_language,
-                "confidence": whisper_confidence,
-                "audio_quality": audio_quality,
-                "speech_accuracy": speech_accuracy,
-                "speech_status": speech_status,
-                "grammar_corrected": grammar_modified,
-                "overall_confidence": overall_confidence,
-                "confidence_level": confidence_level,
-                "review_required": review_required,
-                "review_message": review_message
-            }
-        )
+        for recipient_id, preference in recipient_preferences.items():
+            recipient_language = preference["preferred_language"]
+            recipient_output_mode = preference["output_mode"]
 
-        for recipient_id, recipient_language in recipient_languages.items():
-            translated_text = translated_by_language[recipient_language]
+            if recipient_output_mode == "none":
+                continue
+
+            translation_result = translated_by_language.get(
+                recipient_language,
+                {"success": False, "reason": "translation_missing"},
+            )
+
+            if not translation_result.get("success"):
+                print(
+                    "Translation skipped for "
+                    f"{recipient_id} ({recipient_language}): "
+                    f"{translation_result.get('reason')}"
+                )
+                continue
+
+            translated_text = translation_result["translated_text"]
+
+            audio_url = None
+            if recipient_output_mode in {"voice", "subtitle_voice"}:
+                try:
+                    tts_result = await text_to_speech_service.text_to_speech(
+                        translated_text,
+                        LANGUAGE_MAP.get(recipient_language, "en"),
+                    )
+                    if tts_result.get("success"):
+                        audio_url = (
+                            f"/generated_audio/{tts_result['filename']}"
+                        )
+                except Exception as error:
+                    print(f"TTS delivery failed for {recipient_id}: {error}")
 
             await manager.send_personal_message(
                 {
                     "type": "translation",
+                    "chunk_id": chunk_id,
                     "user_id": user_id,
                     "source_language": detected_language,
                     "target_language": recipient_language,
-                    "text": translated_text,
+                    "text": (
+                        translated_text
+                        if recipient_output_mode in {
+                            "subtitle", "subtitle_voice"
+                        }
+                        else ""
+                    ),
+                    "audio_url": audio_url,
+                    "output_mode": recipient_output_mode,
                     "feedback_id": str(feedback["_id"]) if feedback else None,
                     "confidence": whisper_confidence,
                     "audio_quality": audio_quality,
@@ -295,7 +409,12 @@ async def meeting_socket(
         await websocket.close()
         return
 
-    user_name = _get_user_name(meeting, user_id)
+    participant = _get_participant(meeting, user_id)
+    user_name = participant.get("user_name", "Participant")
+    preferred_language = participant.get(
+        "preferred_language", participant.get("language", "English")
+    )
+    output_mode = _normalize_output_mode(participant.get("output_mode", "none"))
 
     print("\n========== WEBSOCKET JOIN ==========")
     print("Meeting:", meeting_id)
@@ -307,7 +426,9 @@ async def meeting_socket(
             "type": "user_joined",
             "user_id": user_id,
             "user_name": user_name,
-            "participants": manager.get_participants(meeting_id)
+            "preferred_language": preferred_language,
+            "output_mode": output_mode,
+            "participants": _connected_participants(meeting, meeting_id)
         }
     )
 
@@ -334,6 +455,8 @@ async def meeting_socket(
                     {
                         "type": "chat",
                         "user_id": user_id,
+                        "name": user_name,
+                        "user_name": user_name,
                         "text": data.get("text"),
                         "time": data.get("time")
                     }
@@ -348,12 +471,22 @@ async def meeting_socket(
                     {"_id": 0, "participants": 1}
                 )
                 sender_name = _get_user_name(offer_meeting or {}, user_id)
+                sender_participant = _get_participant(
+                    offer_meeting or {}, user_id
+                )
 
                 await manager.send_personal_message(
                     {
                         "type": "offer",
                         "from": user_id,
                         "user_name": sender_name,
+                        "preferred_language": sender_participant.get(
+                            "preferred_language",
+                            sender_participant.get("language", "English"),
+                        ),
+                        "output_mode": _normalize_output_mode(
+                            sender_participant.get("output_mode", "none")
+                        ),
                         "offer": data.get("offer")
                     },
                     meeting_id,
@@ -369,12 +502,22 @@ async def meeting_socket(
                     {"_id": 0, "participants": 1}
                 )
                 sender_name = _get_user_name(answer_meeting or {}, user_id)
+                sender_participant = _get_participant(
+                    answer_meeting or {}, user_id
+                )
 
                 await manager.send_personal_message(
                     {
                         "type": "answer",
                         "from": user_id,
                         "user_name": sender_name,
+                        "preferred_language": sender_participant.get(
+                            "preferred_language",
+                            sender_participant.get("language", "English"),
+                        ),
+                        "output_mode": _normalize_output_mode(
+                            sender_participant.get("output_mode", "none")
+                        ),
                         "answer": data.get("answer")
                     },
                     meeting_id,
@@ -405,6 +548,10 @@ async def meeting_socket(
             # the per-connection queue/worker and immediately go back
             # to listening for the next message.
             elif message_type == "audio_stream":
+                # Preserve the authenticated meeting participant's display
+                # name with the queued chunk so the transcript event can be
+                # rendered without a second lookup in the hot path.
+                data["user_name"] = user_name
                 if audio_queue.full():
                     # Drop the oldest queued chunk to make room. We
                     # care about keeping up with live speech, not
@@ -417,6 +564,35 @@ async def meeting_socket(
 
                 await audio_queue.put(data)
 
+            # Preferences are persisted through the existing meeting join
+            # endpoint. This event only synchronizes that saved state to
+            # connected clients; it does not affect WebRTC or media streams.
+            elif message_type == "participant_preferences":
+                preference_meeting = await meetings_collection.find_one(
+                    {"meeting_id": meeting_id},
+                    {"_id": 0, "participants": 1},
+                )
+                updated_participant = _get_participant(
+                    preference_meeting or {}, user_id
+                )
+                await manager.broadcast(
+                    meeting_id,
+                    {
+                        "type": "participant_preferences",
+                        "user_id": user_id,
+                        "user_name": updated_participant.get(
+                            "user_name", user_name
+                        ),
+                        "preferred_language": updated_participant.get(
+                            "preferred_language",
+                            updated_participant.get("language", "English"),
+                        ),
+                        "output_mode": _normalize_output_mode(
+                            updated_participant.get("output_mode", "none")
+                        ),
+                    },
+                )
+
             # ==========================================
             # MANUAL TRANSCRIPT
             # ==========================================
@@ -425,7 +601,9 @@ async def meeting_socket(
                     meeting_id,
                     {
                         "type": "transcript",
+                        "chunk_id": str(uuid4()),
                         "user_id": user_id,
+                        "user_name": user_name,
                         "text": data.get("text"),
                         "language": data.get("language", "en")
                     }

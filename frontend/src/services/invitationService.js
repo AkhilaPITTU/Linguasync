@@ -1,6 +1,7 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
-const API = import.meta.env.VITE_API_URL;
+const API = API_BASE_URL;
 
 const getToken = () => localStorage.getItem("access_token");
 
@@ -73,11 +74,11 @@ export const getPendingInvitations = async () => {
 // ACCEPT INVITATION
 // ==========================================
 
-export const acceptInvitation = async (invitationId) => {
+export const acceptInvitation = async (invitationId, preferences) => {
     try {
         const response = await axios.put(
             `${API}/api/invitation/accept/${invitationId}`,
-            {},
+            preferences,
             {
                 headers: headers()
             }

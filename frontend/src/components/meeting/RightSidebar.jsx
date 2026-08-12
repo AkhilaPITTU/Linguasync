@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./RightSidebar.css";
 
 import Participants from "./Participants";
@@ -13,10 +13,40 @@ const RightSidebar = ({
     translations = [],
     chatMessages = [],
     language = "English",
+    outputMode = "none",
     setLanguage = () => {},
+    onPreferencesSave = async () => {},
 }) => {
 
     const [activeTab, setActiveTab] = useState("participants");
+    const transcriptCountRef = useRef(transcript.length);
+    const translationCountRef = useRef(translations.length);
+
+    // MeetingRoom updates these arrays from WebSocket events. Follow the
+    // newest real-time content without creating a second socket/data path.
+    useEffect(() => {
+
+        if (transcript.length > transcriptCountRef.current) {
+            setActiveTab("transcript");
+        }
+
+        transcriptCountRef.current = transcript.length;
+
+    }, [transcript.length]);
+
+    useEffect(() => {
+
+        if (translations.length > translationCountRef.current) {
+            setActiveTab("translation");
+        }
+
+        translationCountRef.current = translations.length;
+
+    }, [translations.length]);
+
+    const latestTranslations = translations.filter(
+        (item) => typeof item.text === "string" && item.text.trim()
+    );
 
     return (
 
@@ -36,6 +66,13 @@ const RightSidebar = ({
                     onClick={() => setActiveTab("transcript")}
                 >
                     Transcript
+                </button>
+
+                <button
+                    className={activeTab === "translation" ? "active" : ""}
+                    onClick={() => setActiveTab("translation")}
+                >
+                    Translation
                 </button>
 
                 <button
@@ -76,6 +113,44 @@ const RightSidebar = ({
                     />
                 )}
 
+                {activeTab === "translation" && (
+                    <div className="live-translation-panel">
+
+                        <div className="live-translation-header">
+                            <h3>Live Translation</h3>
+                            <span>{latestTranslations.length}</span>
+                        </div>
+
+                        {latestTranslations.length === 0 ? (
+                            <div className="empty-live-translation">
+                                <p>
+                                    Translated subtitles will appear here in real time.
+                                </p>
+                            </div>
+                        ) : (
+                            latestTranslations.map((item, index) => (
+                                <article
+                                    className="live-translation-card"
+                                    key={item.chunk_id || `${item.user_id}-${index}`}
+                                >
+                                    <div className="live-translation-meta">
+                                        <span>
+                                            {item.target_language || "Translation"}
+                                        </span>
+                                        <small>
+                                            {item.output_mode === "subtitle_voice"
+                                                ? "Subtitles + voice"
+                                                : "Subtitle"}
+                                        </small>
+                                    </div>
+                                    <p>{item.text}</p>
+                                </article>
+                            ))
+                        )}
+
+                    </div>
+                )}
+
                 {activeTab === "chat" && (
                     <ChatPanel
                         messages={chatMessages}
@@ -85,7 +160,9 @@ const RightSidebar = ({
                 {activeTab === "language" && (
                     <LanguageSettings
                         language={language}
+                        outputMode={outputMode}
                         setLanguage={setLanguage}
+                        onPreferencesSave={onPreferencesSave}
                     />
                 )}
 

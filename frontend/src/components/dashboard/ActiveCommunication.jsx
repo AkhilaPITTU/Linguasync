@@ -30,6 +30,14 @@ function ActiveCommunication() {
     const [incomingCall, setIncomingCall] = useState(null);
     const [loading, setLoading] = useState(true);
     const [joining, setJoining] = useState(false);
+    const [showJoinPreferences, setShowJoinPreferences] =
+        useState(false);
+    const [preferredLanguage, setPreferredLanguage] =
+        useState("");
+    const [selectedOutputMode, setSelectedOutputMode] =
+        useState("");
+    const [preferenceError, setPreferenceError] =
+        useState("");
 
     const navigate = useNavigate();
 
@@ -193,6 +201,16 @@ function ActiveCommunication() {
 
         }
 
+        if (!preferredLanguage || !selectedOutputMode) {
+
+            setPreferenceError(
+                "Select both a preferred language and translation output."
+            );
+
+            return;
+
+        }
+
 
         // IMPORTANT:
         // meeting_id is already present in the
@@ -254,7 +272,11 @@ function ActiveCommunication() {
 
             const response =
                 await acceptInvitation(
-                    incomingCall.invitation_id
+                    incomingCall.invitation_id,
+                    {
+                        preferred_language: preferredLanguage,
+                        output_mode: selectedOutputMode,
+                    }
                 );
 
 
@@ -293,7 +315,15 @@ function ActiveCommunication() {
 
 
             navigate(
-                `/meeting/${meetingId}`
+                `/meeting/${meetingId}`,
+                {
+                    state: {
+                        joinPreferences: {
+                            preferred_language: preferredLanguage,
+                            output_mode: selectedOutputMode,
+                        },
+                    },
+                }
             );
 
 
@@ -311,6 +341,14 @@ function ActiveCommunication() {
             setJoining(false);
 
         }
+
+    };
+
+
+    const openJoinPreferences = () => {
+
+        setPreferenceError("");
+        setShowJoinPreferences(true);
 
     };
 
@@ -700,12 +738,135 @@ function ActiveCommunication() {
                     </div>
 
 
+                    {showJoinPreferences ? (
+
+                        <div className="join-preferences">
+
+                            <h4>Before joining</h4>
+
+                            <label htmlFor="join-preferred-language">
+                                Preferred language
+                            </label>
+
+                            <select
+                                id="join-preferred-language"
+                                value={preferredLanguage}
+                                onChange={(event) => {
+                                    setPreferredLanguage(event.target.value);
+                                    setPreferenceError("");
+                                }}
+                            >
+                                <option value="">Select language</option>
+                                <option value="English">English</option>
+                                <option value="Telugu">Telugu</option>
+                                <option value="Hindi">Hindi</option>
+                                <option value="Tamil">Tamil</option>
+                                <option value="Kannada">Kannada</option>
+                                <option value="Malayalam">Malayalam</option>
+                                <option value="Bengali">Bengali</option>
+                                <option value="Marathi">Marathi</option>
+                                <option value="Gujarati">Gujarati</option>
+                                <option value="Punjabi">Punjabi</option>
+                                <option value="French">French</option>
+                                <option value="German">German</option>
+                                <option value="Spanish">Spanish</option>
+                            </select>
+
+                            <fieldset>
+                                <legend>Translation output</legend>
+
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="translation-output"
+                                        value="none"
+                                        checked={selectedOutputMode === "none"}
+                                        onChange={(event) => {
+                                            setSelectedOutputMode(event.target.value);
+                                            setPreferenceError("");
+                                        }}
+                                    />
+                                    No translation
+                                </label>
+
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="translation-output"
+                                        value="subtitle"
+                                        checked={selectedOutputMode === "subtitle"}
+                                        onChange={(event) => {
+                                            setSelectedOutputMode(event.target.value);
+                                            setPreferenceError("");
+                                        }}
+                                    />
+                                    Translated subtitles
+                                </label>
+
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="translation-output"
+                                        value="voice"
+                                        checked={selectedOutputMode === "voice"}
+                                        onChange={(event) => {
+                                            setSelectedOutputMode(event.target.value);
+                                            setPreferenceError("");
+                                        }}
+                                    />
+                                    Translated voice
+                                </label>
+
+                                <label>
+                                    <input
+                                        type="radio"
+                                        name="translation-output"
+                                        value="subtitle_voice"
+                                        checked={selectedOutputMode === "subtitle_voice"}
+                                        onChange={(event) => {
+                                            setSelectedOutputMode(event.target.value);
+                                            setPreferenceError("");
+                                        }}
+                                    />
+                                    Subtitles + translated voice
+                                </label>
+                            </fieldset>
+
+                            {preferenceError && (
+                                <p className="join-preference-error">
+                                    {preferenceError}
+                                </p>
+                            )}
+
+                            <div className="incoming-call-actions">
+                                <button
+                                    className="accept-call-btn"
+                                    onClick={joinInvitation}
+                                    disabled={joining}
+                                >
+                                    <FiPhoneCall />
+                                    {joining ? "Joining..." : "Join Meeting"}
+                                </button>
+
+                                <button
+                                    className="reject-call-btn"
+                                    onClick={() => setShowJoinPreferences(false)}
+                                    disabled={joining}
+                                >
+                                    Back
+                                </button>
+                            </div>
+
+                        </div>
+
+                    ) : (
+
                     <div className="incoming-call-actions">
 
 
                         <button
                             className="accept-call-btn"
-                            onClick={joinInvitation}
+                            onClick={openJoinPreferences}
                             disabled={joining}
                         >
 
@@ -733,6 +894,8 @@ function ActiveCommunication() {
 
 
                     </div>
+
+                    )}
 
 
                 </div>

@@ -53,7 +53,24 @@ function CreateMeeting() {
 
             localStorage.setItem("meeting_id", meetingId);
 
-            navigate(`/meeting/${meetingId}`);
+            const outputModePreferences = {
+                original: "none",
+                text: "subtitle",
+                speech: "voice",
+                translated_speech: "voice",
+                text_speech: "subtitle_voice",
+            };
+
+            navigate(`/meeting/${meetingId}`, {
+                state: {
+                    joinPreferences: {
+                        preferred_language: language,
+                        output_mode:
+                            outputModePreferences[outputMode] ||
+                            "none",
+                    },
+                },
+            });
 
         } catch (error) {
 
@@ -434,4 +451,3 @@ function CreateMeeting() {
 }
 
 export default CreateMeeting;
-                            

@@ -5,6 +5,7 @@ class WebRTCService {
     constructor() {
 
         this.peerConnections = {};
+        this.pendingIceCandidates = {};
         this.localStream = null;
 
         this.configuration = {
@@ -150,6 +151,8 @@ class WebRTCService {
 
             if (!event.candidate) return;
 
+            console.log("ICE candidate sent to:", targetUserId);
+
             websocketService.send({
                 type: "ice_candidate",
                 target: targetUserId,
@@ -258,6 +261,7 @@ class WebRTCService {
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await this.flushPendingIceCandidates(targetUserId);
 
         const answer = await pc.createAnswer();
 
@@ -285,9 +289,13 @@ class WebRTCService {
 
         const pc = this.peerConnections[targetUserId];
 
-        if (!pc) return;
+        if (!pc) {
+            console.warn("Answer received for unknown peer:", targetUserId);
+            return;
+        }
 
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await this.flushPendingIceCandidates(targetUserId);
 
     }
 
@@ -302,12 +310,38 @@ class WebRTCService {
 
         const pc = this.peerConnections[targetUserId];
 
-        if (!pc) return;
+        if (!pc || !pc.remoteDescription) {
+            console.log("ICE candidate queued for:", targetUserId);
+            this.pendingIceCandidates[targetUserId] ||= [];
+            this.pendingIceCandidates[targetUserId].push(candidate);
+            return;
+        }
 
         try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (error) {
             console.error("ICE Error:", error);
+        }
+    }
+
+    async flushPendingIceCandidates(targetUserId) {
+
+        const candidates = this.pendingIceCandidates[targetUserId] || [];
+
+        if (!candidates.length) return;
+
+        const pc = this.peerConnections[targetUserId];
+
+        if (!pc || !pc.remoteDescription) return;
+
+        delete this.pendingIceCandidates[targetUserId];
+
+        for (const candidate of candidates) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.error("Queued ICE Error:", error);
+            }
         }
     }
 
@@ -321,6 +355,7 @@ class WebRTCService {
         if (!pc) return;
         pc.close();
         delete this.peerConnections[targetUserId];
+        delete this.pendingIceCandidates[targetUserId];
     }
 
     closeAllConnections() {
@@ -350,6 +385,7 @@ class WebRTCService {
             this.peerConnections[targetUserId].close();
             delete this.peerConnections[targetUserId];
         }
+        delete this.pendingIceCandidates[targetUserId];
     }
 
     getLocalStream() {

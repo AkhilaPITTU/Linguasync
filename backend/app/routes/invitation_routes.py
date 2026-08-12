@@ -10,6 +10,7 @@ from app.controllers.invitation_controller import (
 
 from app.schemas.invitation_schema import (
     SendInvitationSchema,
+    AcceptInvitationSchema,
 )
 
 router = APIRouter(
@@ -65,10 +66,12 @@ async def pending_invitations(
 
 @router.put("/accept/{invitation_id}")
 async def accept_invitation(
-    invitation_id: str
+    invitation_id: str,
+    data: AcceptInvitationSchema,
 ):
     return await accept_invitation_controller(
-        invitation_id
+        invitation_id,
+        data,
     )
 
 

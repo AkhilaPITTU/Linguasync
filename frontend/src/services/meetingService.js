@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000",
+  baseURL: API_BASE_URL,
 });
 
 // Helper to retrieve auth header
@@ -99,7 +100,12 @@ export const endMeeting = async (meetingId) => {
 // ===========================
 // Join Meeting
 // ===========================
-export const joinMeeting = async (meetingId, userName, language) => {
+export const joinMeeting = async (
+  meetingId,
+  userName,
+  preferredLanguage,
+  outputMode
+) => {
   const userId = getCleanUserId();
 
   // Passing user_id in BOTH query params and body to handle backend expectations safely
@@ -109,7 +115,8 @@ export const joinMeeting = async (meetingId, userName, language) => {
       user_id: userId,
       meeting_id: meetingId,
       user_name: userName,
-      language: language,
+      preferred_language: preferredLanguage,
+      output_mode: outputMode,
     },
     { headers: getAuthHeaders() }
   );

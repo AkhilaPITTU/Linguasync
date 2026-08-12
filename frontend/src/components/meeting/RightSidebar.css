@@ -22,7 +22,7 @@
 
     display:grid;
 
-    grid-template-columns:repeat(5,1fr);
+    grid-template-columns:repeat(6,1fr);
 
     border-bottom:1px solid rgba(255,255,255,.08);
 
@@ -85,4 +85,68 @@
     background:#6C4DFF;
 
     border-radius:10px;
+}
+
+/* Real-time translation feed */
+
+.live-translation-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.live-translation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.live-translation-header h3 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 16px;
+}
+
+.live-translation-header span {
+    min-width: 24px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #6C4DFF;
+    color: #ffffff;
+    font-size: 12px;
+    text-align: center;
+}
+
+.live-translation-card,
+.empty-live-translation {
+    padding: 13px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 10px;
+    background: #171c29;
+}
+
+.live-translation-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #b9adff;
+    font-size: 12px;
+}
+
+.live-translation-meta small {
+    color: #a3afc2;
+}
+
+.live-translation-card p,
+.empty-live-translation p {
+    margin: 9px 0 0;
+    color: #ffffff;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.empty-live-translation p {
+    margin: 0;
+    color: #a3afc2;
 }
