@@ -1,3 +1,5 @@
+import { getUserMediaSafely } from "./mediaDeviceService";
+
 class AudioService {
 
     constructor() {
@@ -39,7 +41,7 @@ class AudioService {
 
         try {
 
-            this.stream = await navigator.mediaDevices.getUserMedia({
+            this.stream = await getUserMediaSafely({
                 audio: true
             });
 

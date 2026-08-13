@@ -1,4 +1,8 @@
 import websocketService from "./websocketService";
+import {
+    getDisplayMediaSafely,
+    getUserMediaSafely,
+} from "./mediaDeviceService";
 
 class WebRTCService {
 
@@ -30,7 +34,7 @@ class WebRTCService {
         try {
 
             this.localStream =
-                await navigator.mediaDevices.getUserMedia({
+                await getUserMediaSafely({
                     video,
                     audio
                 });
@@ -54,7 +58,7 @@ class WebRTCService {
             return this.localStream;
 
         } catch (error) {
-            console.error("Camera/Microphone Error:", error);
+            console.error("Camera/Microphone Error:", error.message || error);
             throw error;
         }
     }
@@ -461,7 +465,7 @@ class WebRTCService {
 
     async startScreenShare() {
 
-        const stream = await navigator.mediaDevices.getDisplayMedia({
+        const stream = await getDisplayMediaSafely({
             video: true
         });
 

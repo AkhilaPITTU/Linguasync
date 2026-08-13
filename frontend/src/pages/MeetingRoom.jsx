@@ -98,6 +98,8 @@ const MeetingRoom = () => {
     const [showAddParticipants, setShowAddParticipants] =
         useState(false);
 
+    const [mediaError, setMediaError] = useState("");
+
     const subtitleTimeoutsRef =
         useRef({});
 
@@ -308,11 +310,20 @@ const MeetingRoom = () => {
                  * audio = true
                  */
 
-                const stream =
-                    await webrtcService.startLocalStream(
+                let stream;
+
+                try {
+                    stream = await webrtcService.startLocalStream(
                         isVideoMeeting,
                         true
                     );
+                } catch (error) {
+                    const message = error?.message ||
+                        "Camera and microphone are unavailable. Please use HTTPS/localhost and allow browser permissions.";
+                    console.error("Meeting media initialization failed:", message);
+                    setMediaError(message);
+                    return;
+                }
 
                 console.log(
                     "Local Stream Started"
@@ -1275,6 +1286,12 @@ const MeetingRoom = () => {
                 <ShowUIButton />
 
             </header>
+
+            {mediaError && (
+                <div className="meeting-media-error" role="alert">
+                    {mediaError}
+                </div>
+            )}
 
             <main className="meeting-main">
 
