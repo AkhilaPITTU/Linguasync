@@ -14,7 +14,6 @@ import {
 import {
     FiPhone,
     FiVideo,
-    FiMic,
     FiUsers,
     FiClock,
     FiGlobe,
@@ -54,6 +53,11 @@ function ActiveCommunication() {
 
             try {
 
+                console.log("[MEETING-IDENTITY]", {
+                    userId: localStorage.getItem("user_id"),
+                    userName: localStorage.getItem("user_name"),
+                });
+
                 const meetingRes = await getActiveMeeting();
 
                 if (!mounted) return;
@@ -71,6 +75,13 @@ function ActiveCommunication() {
                     setActiveCall(
                         meetingRes.meeting
                     );
+
+                    console.log("[MEETING-ACTION]", {
+                        userId: localStorage.getItem("user_id"),
+                        activeMeeting: meetingRes.meeting.meeting_id,
+                        pendingInvitation: null,
+                        action: "continue",
+                    });
 
                     setIncomingCall(null);
 
@@ -100,6 +111,13 @@ function ActiveCommunication() {
                         setIncomingCall(
                             inviteRes.data[0]
                         );
+
+                        console.log("[MEETING-ACTION]", {
+                            userId: localStorage.getItem("user_id"),
+                            activeMeeting: null,
+                            pendingInvitation: inviteRes.data[0].invitation_id,
+                            action: "join",
+                        });
 
                     }
                     else {
@@ -296,6 +314,13 @@ function ActiveCommunication() {
                 return;
 
             }
+
+            console.log("[MEETING-ACTION]", {
+                userId: localStorage.getItem("user_id"),
+                activeMeeting: null,
+                pendingInvitation: incomingCall.invitation_id,
+                action: "accept_and_join",
+            });
 
 
             // -------------------------------------------------

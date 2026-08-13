@@ -18,6 +18,8 @@ class Participant(BaseModel):
 
     preferred_language: str = "English"
 
+    source_language: str = "English"
+
     output_mode: str = "none"
 
     mic_enabled: bool = True

@@ -68,5 +68,10 @@ class Settings:
         "transcript_exports"
     )
 
+    PDF_UNICODE_FONT_PATH = os.getenv(
+        "PDF_UNICODE_FONT_PATH",
+        r"C:\Windows\Fonts\Nirmala.ttc",
+    )
+
 
 settings = Settings()

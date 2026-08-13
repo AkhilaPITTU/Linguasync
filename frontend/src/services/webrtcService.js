@@ -70,7 +70,11 @@ class WebRTCService {
     ) {
 
         if (this.peerConnections[targetUserId]) {
-            console.log("PeerConnection already exists:", targetUserId);
+            console.log("[WEBRTC-MESH]", {
+                local: "current-browser",
+                remote: targetUserId,
+                action: "reuse-peer",
+            });
             return this.peerConnections[targetUserId];
         }
 
@@ -78,7 +82,11 @@ class WebRTCService {
 
         this.peerConnections[targetUserId] = pc;
 
-        console.log("PeerConnection Created:", targetUserId);
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "create-peer",
+        });
 
         // ========================================
         // ADD LOCAL AUDIO + VIDEO
@@ -168,7 +176,11 @@ class WebRTCService {
 
         pc.onconnectionstatechange = () => {
 
-            console.log("Peer:", targetUserId, "Connection:", pc.connectionState);
+            console.log("[WEBRTC-MESH]", {
+                local: "current-browser",
+                remote: targetUserId,
+                state: pc.connectionState,
+            });
 
             if (
                 pc.connectionState === "failed" ||
@@ -220,7 +232,11 @@ class WebRTCService {
 
     async createOffer(targetUserId) {
 
-        console.log("createOffer() called for:", targetUserId);
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "create-offer",
+        });
 
         const pc = this.peerConnections[targetUserId];
 
@@ -250,7 +266,11 @@ class WebRTCService {
 
     async createAnswer(targetUserId, offer) {
 
-        console.log("createAnswer() called for:", targetUserId);
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "create-answer",
+        });
         console.log("Incoming OFFER SDP has audio:", offer?.sdp?.includes("m=audio"));
 
         const pc = this.peerConnections[targetUserId];
@@ -353,6 +373,11 @@ class WebRTCService {
     closePeerConnection(targetUserId) {
         const pc = this.peerConnections[targetUserId];
         if (!pc) return;
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "close",
+        });
         pc.close();
         delete this.peerConnections[targetUserId];
         delete this.pendingIceCandidates[targetUserId];

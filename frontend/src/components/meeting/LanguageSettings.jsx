@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./LanguageSettings.css";
+import { getLanguageCode } from "./languageCode";
 
 const languages = [
     "English",
@@ -23,7 +24,7 @@ const LanguageSettings = ({
     onPreferencesSave = async () => {},
 }) => {
 
-    const [spokenLanguage, setSpokenLanguage] = useState(language);
+    const [preferredLanguage, setPreferredLanguage] = useState(language);
     const [selectedOutputMode, setSelectedOutputMode] = useState(outputMode);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -34,13 +35,13 @@ const LanguageSettings = ({
         try {
 
             await onPreferencesSave({
-                preferred_language: spokenLanguage,
+                preferred_language: preferredLanguage,
+                source_language: getLanguageCode(preferredLanguage),
                 output_mode: selectedOutputMode,
             });
 
-            setLanguage(spokenLanguage);
-
-            localStorage.setItem("spoken_language", spokenLanguage);
+            setLanguage(preferredLanguage);
+            localStorage.setItem("spoken_language", getLanguageCode(preferredLanguage));
             localStorage.setItem("translation_output_mode", selectedOutputMode);
 
             alert("Meeting language preferences saved successfully.");
@@ -66,11 +67,11 @@ const LanguageSettings = ({
 
             <div className="setting-card">
 
-                <label>Preferred Language</label>
+                <label>Preferred subtitle language</label>
 
                 <select
-                    value={spokenLanguage}
-                    onChange={(e) => setSpokenLanguage(e.target.value)}
+                    value={preferredLanguage}
+                    onChange={(e) => setPreferredLanguage(e.target.value)}
                 >
 
                     {languages.map((lang) => (

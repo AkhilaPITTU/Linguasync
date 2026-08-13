@@ -17,6 +17,7 @@ import websocketService from "../services/websocketService";
 import webrtcService from "../services/webrtcService";
 import audioService from "../services/audioService";
 import { API_BASE_URL } from "../services/apiConfig";
+import { getLanguageCode } from "../components/meeting/languageCode";
 
 // Minimum time between audio_stream sends
 const AUDIO_SEND_INTERVAL_MS = 1000;
@@ -24,7 +25,7 @@ const AUDIO_SEND_INTERVAL_MS = 1000;
 const legacyOutputModeToPreference = (mode) => {
 
     if (
-        ["none", "subtitle", "voice", "subtitle_voice"]
+        ["none", "transcription", "subtitle", "voice", "subtitle_voice"]
             .includes(mode)
     ) {
         return mode;
@@ -103,8 +104,28 @@ const MeetingRoom = () => {
     const lastAudioSentAtRef =
         useRef(0);
 
+    const sentAudioChunkCountRef =
+        useRef(0);
+
+    const pendingTranscriptCorrectionsRef = useRef({});
+
+    const correctTranscript = (item, correctedText) => {
+        pendingTranscriptCorrectionsRef.current[item.chunk_id] = item.text;
+        setTranscript((prev) => prev.map((entry) =>
+            entry.chunk_id === item.chunk_id
+                ? { ...entry, text: correctedText, is_corrected: true }
+                : entry
+        ));
+        websocketService.send({
+            type: "correct_transcript",
+            chunk_id: item.chunk_id,
+            corrected_text: correctedText,
+        });
+    };
+
     const saveMeetingPreferences = async ({
         preferred_language,
+        source_language,
         output_mode,
     }) => {
 
@@ -112,7 +133,8 @@ const MeetingRoom = () => {
             meetingId,
             userName,
             preferred_language,
-            output_mode
+            output_mode,
+            source_language || getLanguageCode(preferred_language)
         );
 
         setLanguage(preferred_language);
@@ -130,6 +152,9 @@ const MeetingRoom = () => {
 
         websocketService.send({
             type: "participant_preferences",
+            preferred_language,
+            source_language: source_language || getLanguageCode(preferred_language),
+            output_mode,
         });
     };
 
@@ -235,7 +260,7 @@ const MeetingRoom = () => {
                     joinPreferences?.output_mode ||
                     legacyOutputModeToPreference(
                         savedParticipant?.output_mode ||
-                        outputMode
+                        "none"
                     );
 
                 console.log(
@@ -336,7 +361,8 @@ const MeetingRoom = () => {
                     meetingId,
                     userName,
                     participantLanguage,
-                    participantOutputMode
+                    participantOutputMode,
+                    getLanguageCode(participantLanguage)
                 );
 
                 // ==========================================
@@ -457,6 +483,13 @@ const MeetingRoom = () => {
                             // ==================================
 
                             case "user_joined": {
+
+                                console.log("[PARTICIPANTS]", {
+                                    joined: data.user_id,
+                                    serverParticipants: (data.participants || []).map(
+                                        (participant) => participant.user_id
+                                    ),
+                                });
 
                                 console.log(
                                     "========== USER JOINED =========="
@@ -620,7 +653,7 @@ const MeetingRoom = () => {
 
                                         language:
                                             data.preferred_language ||
-                                            "English",
+                                            "Unknown",
 
                                         outputMode:
                                             data.output_mode ||
@@ -666,7 +699,7 @@ const MeetingRoom = () => {
 
                                             language:
                                                 data.preferred_language ||
-                                                "English",
+                                                "Unknown",
 
                                             outputMode:
                                                 data.output_mode ||
@@ -757,14 +790,40 @@ const MeetingRoom = () => {
                                     typeof data.text !== "string" ||
                                     !data.text.trim()
                                 ) {
+
+                                    console.log(
+                                        "Transcript event ignored: empty text."
+                                    );
+
                                     break;
                                 }
 
+                                console.log("[transcript-received]", {
+                                    currentUserId: userId,
+                                    chunk_id: data.chunk_id,
+                                    speaker_id:
+                                        data.speaker_id || data.user_id,
+                                    speaker_name:
+                                        data.speaker_name || data.user_name,
+                                    language: data.language,
+                                    confidence: data.confidence,
+                                    text: data.text,
+                                });
+
                                 setTranscript(
-                                    (prev) => [
-                                        ...prev,
-                                        data
-                                    ]
+                                    (prev) => {
+
+                                        const next = [...prev, data];
+
+                                        console.log("[transcript-state]", {
+                                            currentUserId: userId,
+                                            previous_count: prev.length,
+                                            new_count: next.length,
+                                            chunk_id: data.chunk_id,
+                                        });
+
+                                        return next;
+                                    }
                                 );
 
                                 break;
@@ -776,21 +835,73 @@ const MeetingRoom = () => {
 
                             case "translation": {
 
+                                // Translation events are sent privately by
+                                // the backend. Keep this guard so a future
+                                // broadcast cannot show another recipient's
+                                // language on this client's subtitle UI.
+                                if (data.recipient_id !== userId) {
+
+                                    console.warn(
+                                        "Translation event rejected: recipient mismatch or missing recipient_id.",
+                                        {
+                                            chunkId: data.chunk_id,
+                                            recipientId: data.recipient_id,
+                                            currentUserId: userId,
+                                        }
+                                    );
+
+                                    break;
+                                }
+
+                                console.log("[translation-received]", {
+                                    chunkId: data.chunk_id,
+                                    speakerId: data.speaker_id || data.user_id,
+                                    recipientId: data.recipient_id,
+                                    accepted: true,
+                                    sourceLanguage: data.source_language,
+                                    targetLanguage: data.target_language,
+                                    outputMode: data.output_mode,
+                                    isSubtitle: data.is_subtitle,
+                                    text: data.text,
+                                });
+
                                 setTranslations(
-                                    (prev) => [
-                                        ...prev,
-                                        data
-                                    ]
+                                    (prev) => {
+
+                                        const existingIndex = prev.findIndex(
+                                            (entry) =>
+                                                entry.chunk_id === data.chunk_id &&
+                                                entry.recipient_id === data.recipient_id
+                                        );
+
+                                        if (existingIndex === -1) {
+                                            return [...prev, data];
+                                        }
+
+                                        return prev.map((entry, index) =>
+                                            index === existingIndex ? data : entry
+                                        );
+                                    }
                                 );
 
                                 if (data.text) {
+
+                                    console.log("[SUBTITLE]", {
+                                        chunkId: data.chunk_id,
+                                        speakerId:
+                                            data.speaker_id || data.user_id,
+                                        recipientId: data.recipient_id,
+                                        targetLanguage:
+                                            data.target_language,
+                                        text: data.text,
+                                    });
 
                                     setParticipants(
                                         (prev) =>
                                             prev.map(
                                                 (p) =>
                                                     p.id ===
-                                                    data.user_id
+                                                    (data.speaker_id || data.user_id)
                                                         ? {
                                                             ...p,
                                                             subtitle:
@@ -803,21 +914,21 @@ const MeetingRoom = () => {
                                     if (
                                         subtitleTimeoutsRef
                                             .current[
-                                            data.user_id
+                                            (data.speaker_id || data.user_id)
                                         ]
                                     ) {
 
                                         clearTimeout(
                                             subtitleTimeoutsRef
                                                 .current[
-                                                data.user_id
+                                                (data.speaker_id || data.user_id)
                                             ]
                                         );
                                     }
 
                                     subtitleTimeoutsRef
                                         .current[
-                                        data.user_id
+                                        (data.speaker_id || data.user_id)
                                     ] =
                                         setTimeout(
                                             () => {
@@ -827,7 +938,7 @@ const MeetingRoom = () => {
                                                         prev.map(
                                                             (p) =>
                                                                 p.id ===
-                                                                data.user_id
+                                                                (data.speaker_id || data.user_id)
                                                                     ? {
                                                                         ...p,
                                                                         subtitle:
@@ -859,6 +970,52 @@ const MeetingRoom = () => {
                                     );
                                 }
 
+                                break;
+                            }
+
+                            // ==================================
+                            // TRANSCRIPT CORRECTION
+                            // ==================================
+
+                            case "transcript_corrected": {
+
+                                setTranscript((prev) => prev.map((entry) =>
+                                    entry.chunk_id === data.chunk_id
+                                        ? {
+                                            ...entry,
+                                            ...data,
+                                            text: data.corrected_text,
+                                            is_corrected: true,
+                                        }
+                                        : entry
+                                ));
+                                delete pendingTranscriptCorrectionsRef.current[
+                                    data.chunk_id
+                                ];
+                                break;
+                            }
+
+                            case "correction_error": {
+
+                                const originalText =
+                                    pendingTranscriptCorrectionsRef.current[
+                                        data.chunk_id
+                                    ];
+                                if (originalText !== undefined) {
+                                    setTranscript((prev) => prev.map((entry) =>
+                                        entry.chunk_id === data.chunk_id
+                                            ? {
+                                                ...entry,
+                                                text: originalText,
+                                                is_corrected: false,
+                                            }
+                                            : entry
+                                    ));
+                                    delete pendingTranscriptCorrectionsRef.current[
+                                        data.chunk_id
+                                    ];
+                                }
+                                console.error("Transcript correction rejected:", data.reason);
                                 break;
                             }
 
@@ -912,6 +1069,8 @@ const MeetingRoom = () => {
                             // ==================================
 
                             case "user_left": {
+
+                                console.log("[USER-LEFT]", { user: data.user_id });
 
                                 console.log(
                                     "Participant left:",
@@ -984,6 +1143,19 @@ const MeetingRoom = () => {
                                 .current =
                                 now;
 
+                            sentAudioChunkCountRef.current += 1;
+
+                            if (
+                                sentAudioChunkCountRef.current === 1 ||
+                                sentAudioChunkCountRef.current % 5 === 0
+                            ) {
+                                console.log("Audio chunk sent:", {
+                                    number:
+                                        sentAudioChunkCountRef.current,
+                                    bytes: audioChunk.byteLength,
+                                });
+                            }
+
                             websocketService.send(
                                 {
                                     type:
@@ -995,15 +1167,18 @@ const MeetingRoom = () => {
                                     user_id:
                                         userId,
 
-                                    language,
-
                                     audio:
                                         Array.from(
                                             new Uint8Array(
                                                 audioChunk
                                             )
-                                        )
+                                    )
                                 }
+                            );
+                        } else {
+
+                            console.warn(
+                                "Audio chunk not sent: WebSocket is not open."
                             );
                         }
                     }
@@ -1061,7 +1236,6 @@ const MeetingRoom = () => {
         userName,
         joinPreferences?.preferred_language,
         joinPreferences?.output_mode,
-        outputMode,
     ]);
 
     // ==========================================
@@ -1128,6 +1302,10 @@ const MeetingRoom = () => {
                         translations={
                             translations
                         }
+
+                        currentUserId={userId}
+
+                        onCorrectTranscript={correctTranscript}
 
                         chatMessages={
                             chatMessages

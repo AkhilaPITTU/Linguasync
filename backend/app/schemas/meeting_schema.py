@@ -35,6 +35,11 @@ class JoinMeetingSchema(BaseModel):
 
     preferred_language: str
 
+    # Spoken/source language is deliberately independent from the recipient
+    # subtitle language. Older clients may omit it and retain the existing
+    # preferred-language fallback.
+    source_language: str | None = None
+
     output_mode: Literal["none", "subtitle", "voice", "subtitle_voice"]
 
 
@@ -62,6 +67,8 @@ class ParticipantSchema(BaseModel):
     language: str
 
     preferred_language: str = "English"
+
+    source_language: str = "English"
 
     output_mode: str = "none"
 

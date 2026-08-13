@@ -138,6 +138,17 @@
     color: #a3afc2;
 }
 
+.live-translation-speaker {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.live-translation-speaker strong {
+    color: #ffffff;
+    font-size: 13px;
+}
+
 .live-translation-card p,
 .empty-live-translation p {
     margin: 9px 0 0;

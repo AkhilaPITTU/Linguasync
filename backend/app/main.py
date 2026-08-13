@@ -33,6 +33,7 @@ from app.routes.translation_engine_routes import (
     router as translation_engine_router
 )
 from app.routes.meeting_routes import router as meeting_router
+from app.routes.conversation_export_routes import router as conversation_export_router
 from app.routes.speech_to_text_routes import (
     router as speech_router
 )
@@ -107,6 +108,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 # ==========================================
@@ -130,6 +132,7 @@ routers = [
     system_status_router,
     translation_engine_router,
     meeting_router,
+    conversation_export_router,
     speech_router,
     tts_router,
     realtime_router,

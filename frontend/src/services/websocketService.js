@@ -4,6 +4,7 @@ class WebSocketService {
 
     constructor() {
         this.socket = null;
+        this.socketInstanceId = 0;
     }
 
     connect(meetingId, userId, onMessage) {
@@ -11,17 +12,25 @@ class WebSocketService {
         return new Promise((resolve, reject) => {
 
             if (this.socket) {
+                console.log("[WS-DISCONNECT]", {
+                    socketInstanceId: this.socket.__linguaSyncSocketInstanceId,
+                    reason: "replaced_by_new_connection",
+                });
                 this.socket.close();
             }
 
             const wsUrl =
-                `${WEBSOCKET_BASE_URL}/ws/meeting/${meetingId}/${userId}`;
+                `${WEBSOCKET_BASE_URL}/ws/meeting/${meetingId}/${userId}` +
+                `?token=${encodeURIComponent(localStorage.getItem("access_token") || "")}`;
 
             console.log("WebSocket connecting:", wsUrl);
 
-            this.socket = new WebSocket(wsUrl);
+            const socket = new WebSocket(wsUrl);
+            const socketInstanceId = ++this.socketInstanceId;
+            socket.__linguaSyncSocketInstanceId = socketInstanceId;
+            this.socket = socket;
 
-            this.socket.onopen = () => {
+            socket.onopen = () => {
 
                 console.log("✅ WebSocket Connected");
                 
@@ -29,7 +38,7 @@ class WebSocketService {
 
             };
 
-            this.socket.onmessage = (event) => {
+            socket.onmessage = (event) => {
 
                 const data = JSON.parse(event.data);
 
@@ -41,7 +50,7 @@ class WebSocketService {
 
             };
 
-            this.socket.onerror = (error) => {
+            socket.onerror = (error) => {
 
                 console.error(error);
 
@@ -49,15 +58,21 @@ class WebSocketService {
 
             };
 
-            this.socket.onclose = (event) => {
+            socket.onclose = (event) => {
 
-                console.log("WebSocket Closed");
+                const isCurrentSocket = this.socket === socket;
+                console.log("[WS-DISCONNECT]", {
+                    socketInstanceId,
+                    code: event.code,
+                    reason: event.reason,
+                    isCurrentSocket,
+                });
 
-                console.log(event.code);
-
-                console.log(event.reason);
-
-                this.socket = null;
+                // A reconnect closes the old socket. Its late close event
+                // must not clear the newer connection's reference.
+                if (isCurrentSocket) {
+                    this.socket = null;
+                }
 
             };
 
@@ -82,6 +97,10 @@ class WebSocketService {
 
         if (this.socket) {
 
+            console.log("[WS-DISCONNECT]", {
+                socketInstanceId: this.socket.__linguaSyncSocketInstanceId,
+                reason: "client_disconnect",
+            });
             this.socket.close();
 
             this.socket = null;

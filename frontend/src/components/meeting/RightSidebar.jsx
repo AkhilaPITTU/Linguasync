@@ -6,6 +6,7 @@ import TranscriptPanel from "./TranscriptPanel";
 import ChatPanel from "./ChatPanel";
 import LanguageSettings from "./LanguageSettings";
 import ExportPanel from "./ExportPanel";
+import { resolveSpeakerName } from "./speakerName";
 
 const RightSidebar = ({
     participants = [],
@@ -13,9 +14,13 @@ const RightSidebar = ({
     translations = [],
     chatMessages = [],
     language = "English",
+    sourceLanguage = "English",
     outputMode = "none",
     setLanguage = () => {},
+    setSourceLanguage = () => {},
     onPreferencesSave = async () => {},
+    currentUserId,
+    onCorrectTranscript = () => {},
 }) => {
 
     const [activeTab, setActiveTab] = useState("participants");
@@ -109,7 +114,10 @@ const RightSidebar = ({
                 {activeTab === "transcript" && (
                     <TranscriptPanel
                         transcript={transcript}
+                        participants={participants}
                         translations={translations}
+                        currentUserId={currentUserId}
+                        onCorrectTranscript={onCorrectTranscript}
                     />
                 )}
 
@@ -134,9 +142,14 @@ const RightSidebar = ({
                                     key={item.chunk_id || `${item.user_id}-${index}`}
                                 >
                                     <div className="live-translation-meta">
-                                        <span>
-                                            {item.target_language || "Translation"}
-                                        </span>
+                                        <div className="live-translation-speaker">
+                                            <strong>
+                                                {resolveSpeakerName(item, participants)}
+                                            </strong>
+                                            <span>
+                                                {item.target_language || "Translation"}
+                                            </span>
+                                        </div>
                                         <small>
                                             {item.output_mode === "subtitle_voice"
                                                 ? "Subtitles + voice"
@@ -160,8 +173,10 @@ const RightSidebar = ({
                 {activeTab === "language" && (
                     <LanguageSettings
                         language={language}
+                        sourceLanguage={sourceLanguage}
                         outputMode={outputMode}
                         setLanguage={setLanguage}
+                        setSourceLanguage={setSourceLanguage}
                         onPreferencesSave={onPreferencesSave}
                     />
                 )}

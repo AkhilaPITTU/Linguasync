@@ -104,7 +104,8 @@ export const joinMeeting = async (
   meetingId,
   userName,
   preferredLanguage,
-  outputMode
+  outputMode,
+  sourceLanguage = null
 ) => {
   const userId = getCleanUserId();
 
@@ -116,10 +117,42 @@ export const joinMeeting = async (
       meeting_id: meetingId,
       user_name: userName,
       preferred_language: preferredLanguage,
+      source_language: sourceLanguage,
       output_mode: outputMode,
     },
     { headers: getAuthHeaders() }
   );
 
   return response.data;
+};
+
+// ===========================
+// Export the authenticated participant's conversation PDF
+// ===========================
+export const exportConversationPdf = async (meetingId) => {
+  const response = await API.post(
+    `/api/meeting/${meetingId}/conversation-export`,
+    {},
+    {
+      headers: getAuthHeaders(),
+      responseType: "blob",
+    }
+  );
+
+  if (!response.data || response.data.size === 0) {
+    throw new Error("The server returned an empty PDF.");
+  }
+
+  const disposition = response.headers["content-disposition"] || "";
+  const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const filename = encodedName ? decodeURIComponent(encodedName) : `LINGUASYNC_Meeting_${meetingId}.pdf`;
+
+  const url = window.URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };

@@ -83,12 +83,28 @@ async def pending_invitations_controller(
 async def accept_invitation_controller(
     invitation_id: str,
     data,
+    authorization: str,
 ):
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization Header"
+        )
+
+    current_user_id = get_user_id(authorization.split(" ", 1)[1])
+
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or Expired Token"
+        )
 
     return await accept_invitation_service(
         invitation_id,
         data.preferred_language,
         data.output_mode,
+        current_user_id,
     )
 
 

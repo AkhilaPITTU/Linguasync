@@ -73,6 +73,7 @@ async def join_meeting_controller(
             user_id=user_id,
             user_name=data.user_name,
             preferred_language=data.preferred_language,
+            source_language=data.source_language,
             output_mode=data.output_mode,
         )
 

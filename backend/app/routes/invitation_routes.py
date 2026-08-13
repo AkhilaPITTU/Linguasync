@@ -68,10 +68,12 @@ async def pending_invitations(
 async def accept_invitation(
     invitation_id: str,
     data: AcceptInvitationSchema,
+    authorization: str = Header(...),
 ):
     return await accept_invitation_controller(
         invitation_id,
         data,
+        authorization,
     )
 
 

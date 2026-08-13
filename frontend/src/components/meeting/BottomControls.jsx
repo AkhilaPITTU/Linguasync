@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./BottomControls.css";
 
@@ -22,7 +22,8 @@ import webrtcService from "../../services/webrtcService";
 import websocketService from "../../services/websocketService";
 
 import {
-    leaveMeeting as leaveMeetingAPI
+    exportConversationPdf,
+    leaveMeeting as leaveMeetingAPI,
 } from "../../services/meetingService";
 
 const BottomControls = ({
@@ -45,6 +46,15 @@ const BottomControls = ({
 
     const [speakerOn, setSpeakerOn] =
         useState(true);
+
+    const [leaveDialog, setLeaveDialog] =
+        useState(false);
+
+    const [exportState, setExportState] =
+        useState("idle");
+
+    const [exportError, setExportError] =
+        useState("");
 
     const meetingId =
         window.location.pathname
@@ -171,7 +181,27 @@ const BottomControls = ({
     // LEAVE MEETING
     // ==========================================
 
-    const leaveMeeting = async () => {
+    useEffect(() => {
+
+        const handleEscape = (event) => {
+
+            if (event.key === "Escape" && !exportState.startsWith("exporting")) {
+
+                setLeaveDialog(false);
+                setExportState("idle");
+                setExportError("");
+
+            }
+
+        };
+
+        window.addEventListener("keydown", handleEscape);
+
+        return () => window.removeEventListener("keydown", handleEscape);
+
+    }, [exportState]);
+
+    const completeLeave = async () => {
 
         try {
 
@@ -201,8 +231,66 @@ const BottomControls = ({
 
     };
 
+    const openLeaveDialog = () => {
+
+        setExportState("idle");
+        setExportError("");
+        setLeaveDialog(true);
+
+    };
+
+    const leaveWithoutSaving = async () => {
+
+        setLeaveDialog(false);
+        await completeLeave();
+
+    };
+
+    const saveAndExport = async () => {
+
+        setExportState("exporting");
+        setExportError("");
+
+        try {
+
+            await exportConversationPdf(meetingId);
+            setLeaveDialog(false);
+            await completeLeave();
+
+        } catch (error) {
+
+            let message = "Unable to export the conversation. Please try again or leave without saving.";
+
+            if (error.response?.data instanceof Blob) {
+
+                try {
+
+                    const payload = JSON.parse(await error.response.data.text());
+                    message = payload.detail || message;
+
+                } catch {
+
+                    // Keep the safe fallback message for a non-JSON error response.
+
+                }
+
+            }
+
+            console.error("[EXPORT ERROR]", {
+                status: error.response?.status,
+                message,
+            });
+
+            setExportError(message);
+            setExportState("error");
+
+        }
+
+    };
+
     return (
 
+        <>
         <div className="bottom-controls">
 
             {/* =================================
@@ -365,7 +453,7 @@ const BottomControls = ({
 
                 <button
                     className="leave-btn"
-                    onClick={leaveMeeting}
+                    onClick={openLeaveDialog}
                     title="Leave Meeting"
                 >
 
@@ -380,6 +468,109 @@ const BottomControls = ({
             </div>
 
         </div>
+
+        {leaveDialog && (
+
+            <div
+                className="leave-dialog-backdrop"
+                role="presentation"
+                onMouseDown={() => {
+
+                    if (!exportState.startsWith("exporting")) {
+
+                        setLeaveDialog(false);
+                        setExportState("idle");
+                        setExportError("");
+
+                    }
+
+                }}
+            >
+
+                <section
+                    className="leave-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="leave-dialog-title"
+                    onMouseDown={(event) => event.stopPropagation()}
+                >
+
+                    <h2 id="leave-dialog-title">
+                        {exportState === "error"
+                            ? "Unable to export conversation"
+                            : "Save conversation before leaving?"}
+                    </h2>
+
+                    <p>
+                        {exportState === "error"
+                            ? exportError
+                            : "Download a PDF of this meeting in your preferred language before you leave."}
+                    </p>
+
+                    <div className="leave-dialog-actions">
+
+                        {exportState === "error" ? (
+
+                            <>
+                                <button
+                                    className="leave-dialog-export"
+                                    onClick={saveAndExport}
+                                >
+                                    Try Again
+                                </button>
+
+                                <button
+                                    className="leave-dialog-danger"
+                                    onClick={leaveWithoutSaving}
+                                >
+                                    Leave Without Saving
+                                </button>
+
+                                <button
+                                    className="leave-dialog-cancel"
+                                    onClick={() => setLeaveDialog(false)}
+                                >
+                                    Cancel
+                                </button>
+                            </>
+
+                        ) : (
+
+                            <>
+                                <button
+                                    className="leave-dialog-export"
+                                    onClick={saveAndExport}
+                                    disabled={exportState === "exporting"}
+                                >
+                                    {exportState === "exporting" ? "Exporting..." : "Save & Export"}
+                                </button>
+
+                                <button
+                                    className="leave-dialog-danger"
+                                    onClick={leaveWithoutSaving}
+                                    disabled={exportState === "exporting"}
+                                >
+                                    Leave Without Saving
+                                </button>
+
+                                <button
+                                    className="leave-dialog-cancel"
+                                    onClick={() => setLeaveDialog(false)}
+                                    disabled={exportState === "exporting"}
+                                >
+                                    Cancel
+                                </button>
+                            </>
+
+                        )}
+
+                    </div>
+
+                </section>
+
+            </div>
+        )}
+        </>
 
     );
 };

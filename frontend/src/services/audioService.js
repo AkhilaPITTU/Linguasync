@@ -10,6 +10,7 @@ class AudioService {
         this.intervalId = null;
         this.onChunk = null;
         this.mimeType = "audio/webm";
+        this.chunkCount = 0;
 
     }
 
@@ -40,6 +41,13 @@ class AudioService {
 
             this.stream = await navigator.mediaDevices.getUserMedia({
                 audio: true
+            });
+
+            const audioTrack = this.stream.getAudioTracks()[0];
+            console.log("Microphone capture:", {
+                enabled: audioTrack?.enabled,
+                readyState: audioTrack?.readyState,
+                settings: audioTrack?.getSettings(),
             });
 
             if (!MediaRecorder.isTypeSupported(this.mimeType)) {
@@ -90,6 +98,14 @@ class AudioService {
             ? new MediaRecorder(this.stream, { mimeType: this.mimeType })
             : new MediaRecorder(this.stream);
 
+        const recorderMimeType =
+            this.mediaRecorder.mimeType || this.mimeType || "browser default";
+
+        console.log("MediaRecorder started:", {
+            mimeType: recorderMimeType,
+            intervalMs: this.chunkIntervalMs,
+        });
+
         const chunks = [];
 
         this.mediaRecorder.ondataavailable = (event) => {
@@ -115,8 +131,18 @@ class AudioService {
 
                 try {
 
-                    const blob = new Blob(chunks, { type: this.mimeType });
+                    const blob = new Blob(chunks, { type: recorderMimeType });
                     const arrayBuffer = await blob.arrayBuffer();
+
+                    this.chunkCount += 1;
+
+                    if (this.chunkCount === 1 || this.chunkCount % 5 === 0) {
+                        console.log("Audio chunk captured:", {
+                            number: this.chunkCount,
+                            bytes: arrayBuffer.byteLength,
+                            mimeType: recorderMimeType,
+                        });
+                    }
 
                     if (typeof this.onChunk === "function") {
                         this.onChunk(arrayBuffer);
@@ -130,6 +156,10 @@ class AudioService {
                     );
 
                 }
+
+            } else {
+
+                console.warn("MediaRecorder stopped without audio data.");
 
             }
 
@@ -175,6 +205,7 @@ class AudioService {
 
         this.mediaRecorder = null;
         this.onChunk = null;
+        this.chunkCount = 0;
 
     }
 
