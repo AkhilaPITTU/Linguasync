@@ -1,7 +1,7 @@
 import "./VideoGrid.css";
 import VideoTile from "./VideoTile";
 
-const VideoGrid = ({ participants = [] }) => {
+const VideoGrid = ({ participants = [], remoteAudioMuted = false }) => {
 
     return (
 
@@ -20,6 +20,7 @@ const VideoGrid = ({ participants = [] }) => {
                     <VideoTile
                         key={participant.id}
                         participant={participant}
+                        remoteAudioMuted={remoteAudioMuted}
                     />
 
                 ))

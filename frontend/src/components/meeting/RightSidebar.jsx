@@ -9,6 +9,7 @@ import ExportPanel from "./ExportPanel";
 import { resolveSpeakerName } from "./speakerName";
 
 const RightSidebar = ({
+    meetingId,
     participants = [],
     transcript = [],
     translations = [],
@@ -21,6 +22,7 @@ const RightSidebar = ({
     onPreferencesSave = async () => {},
     currentUserId,
     onCorrectTranscript = () => {},
+    requestedTab,
 }) => {
 
     const [activeTab, setActiveTab] = useState("participants");
@@ -52,6 +54,12 @@ const RightSidebar = ({
     const latestTranslations = translations.filter(
         (item) => typeof item.text === "string" && item.text.trim()
     );
+
+    useEffect(() => {
+        if (requestedTab) {
+            setActiveTab(requestedTab);
+        }
+    }, [requestedTab]);
 
     return (
 
@@ -183,9 +191,9 @@ const RightSidebar = ({
 
                 {activeTab === "export" && (
                     <ExportPanel
+                        meetingId={meetingId}
                         transcript={transcript}
                         translations={translations}
-                        chatMessages={chatMessages}
                     />
                 )}
 

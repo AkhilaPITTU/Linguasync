@@ -30,3 +30,12 @@ export const getProfile = async () => {
     return response.data.data;
 
 };
+
+export const updateProfile = async (profile) => {
+    const token = localStorage.getItem("access_token");
+    const response = await API.put("/profile/", profile, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+
+    return response.data;
+};

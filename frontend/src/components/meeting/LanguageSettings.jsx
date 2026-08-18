@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./LanguageSettings.css";
 import { getLanguageCode } from "./languageCode";
+import { showToast } from "../notification/toastService";
 
 const languages = [
     "English",
@@ -25,7 +26,9 @@ const LanguageSettings = ({
 }) => {
 
     const [preferredLanguage, setPreferredLanguage] = useState(language);
-    const [selectedOutputMode, setSelectedOutputMode] = useState(outputMode);
+    const [selectedOutputMode, setSelectedOutputMode] = useState(
+        outputMode === "subtitle" ? "subtitle" : "none"
+    );
     const [isSaving, setIsSaving] = useState(false);
 
     const handleSave = async () => {
@@ -44,12 +47,12 @@ const LanguageSettings = ({
             localStorage.setItem("spoken_language", getLanguageCode(preferredLanguage));
             localStorage.setItem("translation_output_mode", selectedOutputMode);
 
-            alert("Meeting language preferences saved successfully.");
+            showToast("Meeting language preferences saved successfully.");
 
         } catch (error) {
 
             console.error("Unable to save meeting language preferences:", error);
-            alert("Unable to save meeting language preferences. Please try again.");
+            showToast("Unable to save meeting language preferences. Please try again.", "error");
 
         } finally {
 
@@ -95,8 +98,6 @@ const LanguageSettings = ({
 
                     <option value="none">No translation</option>
                     <option value="subtitle">Translated subtitles</option>
-                    <option value="voice">Translated voice</option>
-                    <option value="subtitle_voice">Subtitles + translated voice</option>
 
                 </select>
 

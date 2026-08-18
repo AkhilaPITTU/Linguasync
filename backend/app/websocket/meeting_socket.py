@@ -8,8 +8,12 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from app.config.security import get_user_id
 from app.websocket.connection_manager import manager
 from app.ai.whisper_service import whisper_service
-from app.ai.translation_service import translation_service
-from app.config.database import database
+from app.ai.translation_service import LANGUAGE_CODES, translation_service
+from app.config.database import (
+    database,
+    chat_messages_collection,
+    translations_collection,
+)
 from app.services.noise_detection_service import noise_detection_service
 from app.services.speech_accuracy_service import speech_accuracy_service
 from app.services.grammar_correction_service import grammar_correction_service
@@ -23,28 +27,10 @@ router = APIRouter()
 meetings_collection = database["meetings"]
 transcripts_collection = database["transcripts"]
 
-LANGUAGE_MAP = {
-    "English": "en",
-    "Telugu": "te",
-    "Hindi": "hi",
-    "Tamil": "ta",
-    "Kannada": "kn",
-    "Malayalam": "ml",
-    "French": "fr",
-    "German": "de",
-    "Spanish": "es",
-    "Bengali": "bn",
-    "Marathi": "mr",
-    "Gujarati": "gu",
-    "Punjabi": "pa",
-    "Urdu": "ur",
-    "Italian": "it",
-    "Portuguese": "pt",
-    "Russian": "ru",
-    "Chinese": "zh",
-    "Japanese": "ja",
-    "Korean": "ko",
-}
+# Use the NLLB service's language configuration as the single source of
+# truth. Keeping a separate meeting-socket map allows a display name to drift
+# from the code actually supplied to the translation model.
+LANGUAGE_MAP = LANGUAGE_CODES
 
 # How many audio_stream chunks we'll let queue up per connection
 # before we start dropping the oldest ones. This is a safety valve:
@@ -114,11 +100,35 @@ def _connected_participants(meeting: dict, meeting_id: str) -> list:
     return participants
 
 
+def _detect_chat_source_language(text: str, hint: str | None) -> str | None:
+    """Prefer an unambiguous script in typed text, then use a client hint."""
+    script_ranges = (
+        ("te", "\u0c00", "\u0c7f"),
+        ("hi", "\u0900", "\u097f"),
+        ("ta", "\u0b80", "\u0bff"),
+        ("kn", "\u0c80", "\u0cff"),
+        ("ml", "\u0d00", "\u0d7f"),
+        ("bn", "\u0980", "\u09ff"),
+        ("gu", "\u0a80", "\u0aff"),
+        ("pa", "\u0a00", "\u0a7f"),
+        ("ur", "\u0600", "\u06ff"),
+        ("ru", "\u0400", "\u04ff"),
+        ("zh", "\u4e00", "\u9fff"),
+        ("ja", "\u3040", "\u30ff"),
+        ("ko", "\uac00", "\ud7af"),
+    )
+    for code, start, end in script_ranges:
+        if any(start <= character <= end for character in text):
+            return code
+    return hint
+
+
 async def _process_audio_chunk(
     meeting_id: str,
     user_id: str,
     data: dict,
     postprocess_queue: "asyncio.Queue[dict]",
+    microphone_state: dict,
 ):
     """
     Runs the full audio pipeline for a single chunk: noise check,
@@ -129,6 +139,9 @@ async def _process_audio_chunk(
     directly inside the message-receive loop.
     """
     try:
+        if microphone_state.get("muted"):
+            print(f"[MIC] muted audio dropped before processing user_id={user_id}")
+            return
         audio_started_at = perf_counter()
         # The id is assigned when the message enters the queue, so every
         # receive/queue/decode/transcript/translation log line can be traced
@@ -140,8 +153,18 @@ async def _process_audio_chunk(
             {"meeting_id": meeting_id}, {"_id": 0, "participants": 1}
         )
         speaker = _get_participant(meeting or {}, user_id)
-        configured_source_language = speaker.get("source_language") or LANGUAGE_MAP.get(
-            speaker.get("preferred_language", speaker.get("language", "")),
+        # A participant's selected preferred language is the application's
+        # explicit source-speech language setting for that speaker. Resolve
+        # it through the existing canonical NLLB mapping and pass that code
+        # to Whisper. Recipient preferences remain translation targets later
+        # in the post-processing flow.
+        stored_preferred_language = speaker.get(
+            "preferred_language", speaker.get("language", "")
+        )
+        configured_source_language = translation_service.get_language_code(
+            stored_preferred_language
+        ) or translation_service.get_language_code(
+            speaker.get("source_language")
         )
 
         print(
@@ -164,7 +187,8 @@ async def _process_audio_chunk(
         )
         print(
             f"[AUDIO-TRACE] chunk_id={chunk_id} user_id={user_id} "
-            f"configured_source_language={configured_source_language} "
+            f"asr_language_hint={configured_source_language} "
+            f"speaker_preferred_language={stored_preferred_language} "
             f"received_bytes={len(audio_bytes)} container={noise_result.get('container')} "
             f"codec={noise_result.get('codec')} sample_rate={noise_result.get('whisper_sample_rate')} "
             f"channels=1 duration={noise_result.get('duration')} "
@@ -265,6 +289,10 @@ async def _process_audio_chunk(
                 f"compression_ratio={segment.get('compression_ratio')}"
             )
 
+        if microphone_state.get("muted"):
+            print(f"[MIC] muted audio dropped after transcription user_id={user_id}")
+            return
+
         if not transcript.strip():
             print(f"[audio:{chunk_id}] Whisper returned empty text.")
             return
@@ -343,6 +371,11 @@ async def _process_audio_chunk(
         )
 
         print(
+            f"[conversation-save] type=transcript meeting_id={meeting_id} "
+            f"user_id={user_id} chunk_id={chunk_id} saved=True"
+        )
+
+        print(
             f"[transcript-dispatch] chunk_id={chunk_id} speaker_id={user_id} "
             f"speaker_name={user_name!r} source_language={translation_source_language} "
             f"text={transcript!r} recipients={transcript_recipients}"
@@ -376,6 +409,142 @@ async def _process_audio_chunk(
             },
             meeting_id,
             user_id
+        )
+
+
+async def _process_chat_message(meeting_id: str, sender_id: str, data: dict):
+    """Route one original chat message to each connected recipient safely."""
+    original_text = data.get("text", "").strip()
+    if not original_text:
+        return
+
+    meeting = await meetings_collection.find_one(
+        {"meeting_id": meeting_id}, {"_id": 0, "participants": 1}
+    ) or {}
+    sender = _get_participant(meeting, sender_id)
+    sender_name = sender.get("user_name") or _get_user_name(meeting, sender_id)
+    recipients = _connected_participants(meeting, meeting_id)
+    source_language = _detect_chat_source_language(
+        original_text,
+        data.get("source_language") or sender.get("source_language") or LANGUAGE_MAP.get(
+        sender.get("preferred_language", sender.get("language", ""))
+        ),
+    )
+    message_id = str(uuid4())
+    timestamp = data.get("time") or datetime.now(timezone.utc).isoformat()
+
+    chat_record = {
+        "meeting_id": meeting_id,
+        "message_id": message_id,
+        "sender_id": sender_id,
+        "sender_name": sender_name,
+        "original_text": original_text,
+        "source_language": source_language,
+        "timestamp": timestamp,
+        "recipient_ids": [recipient["user_id"] for recipient in recipients],
+        "deliveries": [],
+    }
+    try:
+        save_result = await chat_messages_collection.update_one(
+            {"meeting_id": meeting_id, "message_id": message_id},
+            {"$set": chat_record},
+            upsert=True,
+        )
+        print(
+            f"[conversation-save] type=chat meeting_id={meeting_id} user_id={sender_id} "
+            f"message_id={message_id} saved=True upserted={save_result.upserted_id is not None}"
+        )
+    except Exception as error:
+        # Delivery must remain available even if optional history persistence fails.
+        print(f"[chat:{message_id}] persistence failed: {type(error).__name__}: {error}")
+
+    print(
+        f"[chat:{message_id}] received meeting_id={meeting_id} "
+        f"sender_id={sender_id} sender_name={sender_name!r} "
+        f"source_language={source_language!r} original_text={original_text!r}"
+    )
+
+    deliveries = []
+    for recipient in recipients:
+        recipient_id = recipient["user_id"]
+        target_language = recipient["preferred_language"]
+        delivered_text = original_text
+        translated = False
+
+        if recipient_id != sender_id:
+            target_code = LANGUAGE_MAP.get(target_language)
+            if source_language and target_code:
+                try:
+                    async with translation_model_lock:
+                        result = await asyncio.to_thread(
+                            translation_service.translate,
+                            original_text,
+                            source_lang=source_language,
+                            target_lang=target_code,
+                        )
+                    if result.get("success") and result.get("translated_text"):
+                        delivered_text = result["translated_text"]
+                        translated = source_language != target_code
+                    else:
+                        print(
+                            f"[chat:{message_id}] translation fallback recipient_id={recipient_id} "
+                            f"target_language={target_language!r} reason={result.get('reason')}"
+                        )
+                except Exception as error:
+                    print(
+                        f"[chat:{message_id}] translation error recipient_id={recipient_id} "
+                        f"target_language={target_language!r}: {type(error).__name__}: {error}"
+                    )
+            else:
+                print(
+                    f"[chat:{message_id}] translation fallback recipient_id={recipient_id} "
+                    f"source_language={source_language!r} target_language={target_language!r} "
+                    "reason=unsupported_language"
+                )
+
+        delivered = await manager.send_personal_message(
+            {
+                "type": "chat",
+                "meeting_id": meeting_id,
+                "message_id": message_id,
+                "user_id": sender_id,
+                "sender_id": sender_id,
+                "name": sender_name,
+                "user_name": sender_name,
+                "recipient_id": recipient_id,
+                "recipient_preferred_language": target_language,
+                "source_language": source_language,
+                "original_text": original_text,
+                "translated_text": delivered_text,
+                "text": delivered_text,
+                "is_translated": translated,
+                "time": timestamp,
+            },
+            meeting_id,
+            recipient_id,
+        )
+        print(
+            f"[chat:{message_id}] recipient_id={recipient_id} "
+            f"target_language={target_language!r} translated={translated} delivered={delivered}"
+        )
+        deliveries.append({
+            "recipient_id": recipient_id,
+            "target_language": target_language,
+            "text": delivered_text,
+            "is_translated": translated,
+            "delivered": delivered,
+        })
+
+    try:
+        await chat_messages_collection.update_one(
+            {"meeting_id": meeting_id, "message_id": message_id},
+            {"$set": {"deliveries": deliveries}},
+        )
+    except Exception as error:
+        print(
+            f"[conversation-save] type=chat_delivery meeting_id={meeting_id} "
+            f"user_id={sender_id} message_id={message_id} saved=False "
+            f"error={type(error).__name__}: {error}"
         )
 
 
@@ -426,14 +595,26 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
             f"recipient_name={name!r} preferred_language={language} "
             f"output_mode={output_mode}"
         )
-        if output_mode in {"subtitle", "voice", "subtitle_voice"}:
+        # The speaker already receives the recipient-independent original
+        # transcript. Translation events are only for other recipients.
+        if (
+            recipient_id != job["user_id"] and
+            output_mode in {"subtitle", "voice", "subtitle_voice"}
+        ):
             recipients_by_language.setdefault(language, []).append(
                 (recipient_id, name, output_mode)
             )
 
     async def translate_and_deliver(language, recipients):
-        target_code = LANGUAGE_MAP.get(language)
+        target_code = translation_service.get_language_code(language)
         started = perf_counter()
+        for recipient_id, _recipient_name, _output_mode in recipients:
+            print(
+                f"[TRANSLATION-DEBUG] recipient_id={recipient_id} "
+                f"preferred_language={language!r} "
+                f"target_language_code={target_code!r} "
+                f"source_language={job['detected_language']!r}"
+            )
         if not target_code:
             result = {"success": False, "reason": "unsupported_recipient_language"}
         else:
@@ -458,6 +639,42 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                 )
                 continue
             translated_text = result["translated_text"]
+            try:
+                save_result = await translations_collection.update_one(
+                    {
+                        "meeting_id": meeting_id,
+                        "chunk_id": chunk_id,
+                        "user_id": recipient_id,
+                    },
+                    {"$set": {
+                        "meeting_id": meeting_id,
+                        "chunk_id": chunk_id,
+                        "user_id": recipient_id,
+                        "recipient_id": recipient_id,
+                        "speaker_id": job["user_id"],
+                        "speaker_name": job["user_name"],
+                        "source_language": job["detected_language"],
+                        "target_language": language,
+                        "source_text": job["transcript"],
+                        "translated_text": translated_text,
+                        "text": translated_text,
+                        "translation_type": "Speech",
+                        "word_count": len(translated_text.split()),
+                        "created_at": datetime.now(timezone.utc),
+                    }},
+                    upsert=True,
+                )
+                print(
+                    f"[conversation-save] type=translation meeting_id={meeting_id} "
+                    f"user_id={recipient_id} chunk_id={chunk_id} saved=True "
+                    f"matched={save_result.matched_count} upserted={save_result.upserted_id is not None}"
+                )
+            except Exception as error:
+                print(
+                    f"[conversation-save] type=translation meeting_id={meeting_id} "
+                    f"user_id={recipient_id} chunk_id={chunk_id} saved=False "
+                    f"error={type(error).__name__}: {error}"
+                )
             audio_url = None
             if output_mode in {"voice", "subtitle_voice"}:
                 try:
@@ -487,7 +704,6 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                 f"speaker_name={job['user_name']!r} recipient_id={recipient_id} "
                 f"recipient_name={recipient_name!r} preferred_language={language} "
                 f"target_language={language} output_mode={output_mode} "
-                f"source_text={job['transcript']!r} translated_text={translated_text!r} "
                 f"elapsed={elapsed:.2f}s delivered={delivered}"
             )
             print(
@@ -515,7 +731,7 @@ async def _postprocess_worker(meeting_id: str, user_id: str, queue: "asyncio.Que
             queue.task_done()
 
 
-async def _audio_worker(meeting_id: str, user_id: str, queue: "asyncio.Queue[dict]", postprocess_queue: "asyncio.Queue[dict]"):
+async def _audio_worker(meeting_id: str, user_id: str, queue: "asyncio.Queue[dict]", postprocess_queue: "asyncio.Queue[dict]", microphone_state: dict):
     """
     Drains the per-connection audio queue one chunk at a time. Running
     this as its own task -- separate from the message-receive loop --
@@ -531,7 +747,10 @@ async def _audio_worker(meeting_id: str, user_id: str, queue: "asyncio.Queue[dic
             if data is None:  # sentinel used to stop the worker
                 return
             started = perf_counter()
-            await _process_audio_chunk(meeting_id, user_id, data, postprocess_queue)
+            if microphone_state.get("muted"):
+                print(f"[MIC] muted queued audio dropped user_id={user_id}")
+                continue
+            await _process_audio_chunk(meeting_id, user_id, data, postprocess_queue, microphone_state)
             print(f"[audio-worker] user={user_id} chunk_id={data.get('chunk_id')} elapsed={perf_counter() - started:.2f}s queue_size={queue.qsize()}")
         finally:
             queue.task_done()
@@ -613,8 +832,11 @@ async def meeting_socket(
     postprocess_queue: "asyncio.Queue[dict]" = asyncio.Queue(
         maxsize=MAX_POSTPROCESS_CHUNKS
     )
+    microphone_state = {"muted": False, "closing": False}
     worker_task = asyncio.create_task(
-        _audio_worker(meeting_id, user_id, audio_queue, postprocess_queue)
+        _audio_worker(
+            meeting_id, user_id, audio_queue, postprocess_queue, microphone_state
+        )
     )
     postprocess_task = asyncio.create_task(
         _postprocess_worker(meeting_id, user_id, postprocess_queue)
@@ -629,17 +851,7 @@ async def meeting_socket(
             # CHAT MESSAGE
             # ==========================================
             if message_type == "chat":
-                await manager.broadcast(
-                    meeting_id,
-                    {
-                        "type": "chat",
-                        "user_id": user_id,
-                        "name": user_name,
-                        "user_name": user_name,
-                        "text": data.get("text"),
-                        "time": data.get("time")
-                    }
-                )
+                await _process_chat_message(meeting_id, user_id, data)
 
             # ==========================================
             # WEBRTC OFFER
@@ -727,6 +939,12 @@ async def meeting_socket(
             # the per-connection queue/worker and immediately go back
             # to listening for the next message.
             elif message_type == "audio_stream":
+                if microphone_state["muted"] or microphone_state["closing"]:
+                    print(
+                        f"[MIC] incoming audio ignored user_id={user_id} "
+                        f"muted={microphone_state['muted']} closing={microphone_state['closing']}"
+                    )
+                    continue
                 chunk_id = str(uuid4())
                 print(
                     f"[audio:{chunk_id}] queue user={user_id} "
@@ -755,6 +973,51 @@ async def meeting_socket(
                         pass
 
                 await audio_queue.put(data)
+
+            elif message_type == "microphone_state":
+                muted = bool(data.get("muted"))
+                microphone_state["muted"] = muted
+                print(f"[MIC] backend state user_id={user_id} muted={muted}")
+                if muted:
+                    dropped = 0
+                    while not audio_queue.empty():
+                        try:
+                            audio_queue.get_nowait()
+                            audio_queue.task_done()
+                            dropped += 1
+                        except asyncio.QueueEmpty:
+                            break
+                    print(f"[MIC] queued audio dropped user_id={user_id} count={dropped}")
+
+            elif message_type == "conversation_flush":
+                microphone_state["closing"] = True
+                print(
+                    f"[conversation-save] meeting_end_started meeting_id={meeting_id} "
+                    f"user_id={user_id} pending_tasks={audio_queue.qsize() + postprocess_queue.qsize()}"
+                )
+                try:
+                    await asyncio.wait_for(audio_queue.join(), timeout=45)
+                    await asyncio.wait_for(postprocess_queue.join(), timeout=45)
+                    flushed = True
+                except asyncio.TimeoutError:
+                    flushed = False
+                    print(
+                        f"[conversation-save] meeting_id={meeting_id} user_id={user_id} "
+                        "flush_timed_out=True"
+                    )
+                await manager.send_personal_message(
+                    {
+                        "type": "conversation_flush_complete",
+                        "meeting_id": meeting_id,
+                        "flushed": flushed,
+                    },
+                    meeting_id,
+                    user_id,
+                )
+                print(
+                    f"[conversation-save] meeting_end_complete meeting_id={meeting_id} "
+                    f"user_id={user_id} flushed={flushed}"
+                )
 
             # Preferences are persisted through the existing meeting join
             # endpoint. This event only synchronizes that saved state to
@@ -816,6 +1079,10 @@ async def meeting_socket(
                         "created_at": datetime.now(timezone.utc),
                     }},
                     upsert=True,
+                )
+                print(
+                    f"[conversation-save] type=manual_transcript meeting_id={meeting_id} "
+                    f"user_id={user_id} chunk_id={chunk_id} saved=True"
                 )
                 print(
                     f"[transcript-dispatch] chunk_id={chunk_id} "
@@ -1039,15 +1306,31 @@ async def meeting_socket(
             )
 
     finally:
-        # Stop the worker task cleanly so it doesn't leak once the
-        # connection is gone.
-        worker_task.cancel()
+        microphone_state["closing"] = True
+        print(
+            f"[conversation-save] meeting_end_started meeting_id={meeting_id} "
+            f"user_id={user_id} pending_tasks={audio_queue.qsize() + postprocess_queue.qsize()}"
+        )
         try:
-            await worker_task
-        except asyncio.CancelledError:
-            pass
-        postprocess_task.cancel()
-        try:
-            await postprocess_task
-        except asyncio.CancelledError:
-            pass
+            await asyncio.wait_for(audio_queue.join(), timeout=45)
+            await asyncio.wait_for(postprocess_queue.join(), timeout=30)
+        except asyncio.TimeoutError:
+            print(
+                f"[conversation-save] meeting_id={meeting_id} user_id={user_id} "
+                "postprocess_flush_timed_out=True"
+            )
+        finally:
+            worker_task.cancel()
+            try:
+                await worker_task
+            except asyncio.CancelledError:
+                pass
+            postprocess_task.cancel()
+            try:
+                await postprocess_task
+            except asyncio.CancelledError:
+                pass
+        print(
+            f"[conversation-save] meeting_end_complete meeting_id={meeting_id} "
+            f"user_id={user_id}"
+        )

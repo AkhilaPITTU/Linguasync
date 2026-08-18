@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./BottomControls.css";
 
@@ -16,6 +16,8 @@ import {
     FaClosedCaptioning,
     FaVolumeUp,
     FaVolumeMute,
+    FaDesktop,
+    FaStop,
 } from "react-icons/fa";
 
 import webrtcService from "../../services/webrtcService";
@@ -28,7 +30,11 @@ import {
 
 const BottomControls = ({
     onAddParticipants,
-    meetingType = "video"
+    meetingType = "video",
+    onOpenPanel = () => {},
+    onSpeakerChange = () => {},
+    onMicrophoneChange = () => {},
+    onBeforeLeave = async () => ({ flushed: false }),
 }) => {
 
     const navigate = useNavigate();
@@ -47,6 +53,8 @@ const BottomControls = ({
     const [speakerOn, setSpeakerOn] =
         useState(true);
 
+    const [screenSharing, setScreenSharing] = useState(false);
+
     const [leaveDialog, setLeaveDialog] =
         useState(false);
 
@@ -55,6 +63,9 @@ const BottomControls = ({
 
     const [exportError, setExportError] =
         useState("");
+
+    const [isLeaving, setIsLeaving] = useState(false);
+    const flushPromiseRef = useRef(null);
 
     const meetingId =
         window.location.pathname
@@ -75,36 +86,16 @@ const BottomControls = ({
 
     const toggleMic = () => {
 
-        const stream =
-            webrtcService.localStream;
-
-        if (!stream) return;
-
-        const audioTracks =
-            stream.getAudioTracks();
-
+        const audioTracks = webrtcService.localStream?.getAudioTracks() || [];
         if (audioTracks.length === 0) {
-            console.warn(
-                "No audio track available."
-            );
+            console.error("[MIC-DEBUG] cannot toggle microphone: no local audio track");
             return;
         }
 
-        const newState =
-            !audioTracks[0].enabled;
-
-        audioTracks.forEach(
-            (track) => {
-                track.enabled = newState;
-            }
-        );
+        const newState = !audioTracks.every((track) => track.enabled);
 
         setMicOn(newState);
-
-        console.log(
-            "Microphone:",
-            newState ? "ON" : "OFF"
-        );
+        onMicrophoneChange(newState);
     };
 
     // ==========================================
@@ -159,9 +150,11 @@ const BottomControls = ({
 
     const toggleSpeaker = () => {
 
-        setSpeakerOn(
-            (prev) => !prev
-        );
+        setSpeakerOn((prev) => {
+            const next = !prev;
+            onSpeakerChange(next);
+            return next;
+        });
 
     };
 
@@ -201,9 +194,22 @@ const BottomControls = ({
 
     }, [exportState]);
 
+    const prepareForLeave = async () => {
+        if (!flushPromiseRef.current) {
+            flushPromiseRef.current = Promise.resolve(onBeforeLeave());
+        }
+        return flushPromiseRef.current;
+    };
+
     const completeLeave = async () => {
 
+        if (isLeaving) return;
+        setIsLeaving(true);
+
         try {
+
+            const flushResult = await prepareForLeave();
+            console.log("[conversation-save] frontend flush", flushResult);
 
             if (meetingId && userId) {
 
@@ -221,14 +227,30 @@ const BottomControls = ({
                 error
             );
 
+        } finally {
+            websocketService.disconnect();
+            webrtcService.closeConnection();
+            navigate("/dashboard");
         }
 
-        websocketService.disconnect();
+    };
 
-        webrtcService.closeConnection();
-
-        navigate("/dashboard");
-
+    const toggleScreenShare = async () => {
+        try {
+            if (screenSharing) {
+                await webrtcService.stopScreenShare();
+                setScreenSharing(false);
+            } else {
+                const screenStream = await webrtcService.startScreenShare();
+                screenStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+                    setScreenSharing(false);
+                }, { once: true });
+                setScreenSharing(true);
+            }
+        } catch (error) {
+            console.error("Screen sharing error:", error);
+            setScreenSharing(false);
+        }
     };
 
     const openLeaveDialog = () => {
@@ -253,6 +275,7 @@ const BottomControls = ({
 
         try {
 
+            await prepareForLeave();
             await exportConversationPdf(meetingId);
             setLeaveDialog(false);
             await completeLeave();
@@ -392,6 +415,7 @@ const BottomControls = ({
 
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("participants")}
                     title="Participants"
                 >
 
@@ -403,6 +427,7 @@ const BottomControls = ({
 
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("chat")}
                     title="Chat"
                 >
 
@@ -414,6 +439,7 @@ const BottomControls = ({
 
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("transcript")}
                     title="Live Captions"
                 >
 
@@ -425,11 +451,20 @@ const BottomControls = ({
 
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("translation")}
                     title="Translation"
                 >
 
                     <FaLanguage />
 
+                </button>
+
+                <button
+                    className={`control-btn ${screenSharing ? "active" : ""}`}
+                    onClick={toggleScreenShare}
+                    title={screenSharing ? "Stop Screen Sharing" : "Share Screen"}
+                >
+                    {screenSharing ? <FaStop /> : <FaDesktop />}
                 </button>
 
                 {/* DOWNLOAD TRANSCRIPT */}
@@ -515,6 +550,7 @@ const BottomControls = ({
                                 <button
                                     className="leave-dialog-export"
                                     onClick={saveAndExport}
+                                    disabled={isLeaving}
                                 >
                                     Try Again
                                 </button>
@@ -522,6 +558,7 @@ const BottomControls = ({
                                 <button
                                     className="leave-dialog-danger"
                                     onClick={leaveWithoutSaving}
+                                    disabled={isLeaving}
                                 >
                                     Leave Without Saving
                                 </button>
@@ -540,7 +577,7 @@ const BottomControls = ({
                                 <button
                                     className="leave-dialog-export"
                                     onClick={saveAndExport}
-                                    disabled={exportState === "exporting"}
+                                    disabled={exportState === "exporting" || isLeaving}
                                 >
                                     {exportState === "exporting" ? "Exporting..." : "Save & Export"}
                                 </button>
@@ -548,7 +585,7 @@ const BottomControls = ({
                                 <button
                                     className="leave-dialog-danger"
                                     onClick={leaveWithoutSaving}
-                                    disabled={exportState === "exporting"}
+                                    disabled={exportState === "exporting" || isLeaving}
                                 >
                                     Leave Without Saving
                                 </button>

@@ -5,6 +5,7 @@ class WebSocketService {
     constructor() {
         this.socket = null;
         this.socketInstanceId = 0;
+        this.flushResolver = null;
     }
 
     connect(meetingId, userId, onMessage) {
@@ -42,6 +43,11 @@ class WebSocketService {
 
                 const data = JSON.parse(event.data);
 
+                if (data.type === "conversation_flush_complete" && this.flushResolver) {
+                    this.flushResolver(data);
+                    this.flushResolver = null;
+                }
+
                 console.log("📨 WS:", data.type, data);
 
                 if (onMessage) {
@@ -73,6 +79,10 @@ class WebSocketService {
                 if (isCurrentSocket) {
                     this.socket = null;
                 }
+                if (this.flushResolver) {
+                    this.flushResolver({ flushed: false, reason: "socket_closed" });
+                    this.flushResolver = null;
+                }
 
             };
 
@@ -88,8 +98,11 @@ class WebSocketService {
         ) {
 
             this.socket.send(JSON.stringify(data));
+            return true;
 
         }
+
+        return false;
 
     }
 
@@ -107,6 +120,27 @@ class WebSocketService {
 
         }
 
+    }
+
+    flushConversation(timeoutMs = 50000) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            return Promise.resolve({ flushed: false, reason: "socket_not_open" });
+        }
+
+        return new Promise((resolve) => {
+            const timeoutId = window.setTimeout(() => {
+                if (this.flushResolver) {
+                    this.flushResolver = null;
+                    resolve({ flushed: false, reason: "timeout" });
+                }
+            }, timeoutMs);
+
+            this.flushResolver = (result) => {
+                window.clearTimeout(timeoutId);
+                resolve(result);
+            };
+            this.socket.send(JSON.stringify({ type: "conversation_flush" }));
+        });
     }
 
 }

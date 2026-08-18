@@ -34,6 +34,7 @@ from app.routes.translation_engine_routes import (
 )
 from app.routes.meeting_routes import router as meeting_router
 from app.routes.conversation_export_routes import router as conversation_export_router
+from app.routes.chat_export_routes import router as chat_export_router
 from app.routes.speech_to_text_routes import (
     router as speech_router
 )
@@ -133,6 +134,7 @@ routers = [
     translation_engine_router,
     meeting_router,
     conversation_export_router,
+    chat_export_router,
     speech_router,
     tts_router,
     realtime_router,

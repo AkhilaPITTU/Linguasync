@@ -51,10 +51,19 @@ class TranslationService:
         if not language:
             return None
 
-        if len(language) == 2:
-            return language.lower()
+        normalized_language = str(language).strip()
 
-        return self.language_codes.get(language)
+        if len(normalized_language) == 2:
+            return normalized_language.lower()
+
+        # Meeting records are normally stored with display names such as
+        # "Telugu", but normalize casing/whitespace so a valid preference
+        # cannot be routed through an unrelated fallback language.
+        for language_name, config in LANGUAGE_CONFIG.items():
+            if language_name.casefold() == normalized_language.casefold():
+                return config["code"]
+
+        return self.language_codes.get(normalized_language)
 
     def load_model(self):
 

@@ -17,6 +17,7 @@ import RecentCallsPage from "../pages/RecentCallsPage";
 import TranslationHistoryPage from "../pages/TranslationHistoryPage";
 import ExportedChatsPage from "../pages/ExportedChatsPage";
 import ProfileOverviewPage from "../pages/ProfileOverviewPage";
+import IncomingInvitationPopup from "../components/invitations/IncomingInvitationPopup";
 
 
 // ==========================================
@@ -30,7 +31,7 @@ function ProtectedRoute({ children }) {
     );
 
     return token
-        ? children
+        ? <><IncomingInvitationPopup />{children}</>
         : <Navigate to="/login" replace />;
 
 }

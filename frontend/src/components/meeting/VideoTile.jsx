@@ -1,7 +1,7 @@
 import "./VideoTile.css";
 import { useEffect, useRef } from "react";
 
-const VideoTile = ({ participant }) => {
+const VideoTile = ({ participant, remoteAudioMuted = false }) => {
 
     const videoRef = useRef(null);
 
@@ -74,8 +74,7 @@ const VideoTile = ({ participant }) => {
 
         // Local participant should not hear
         // their own microphone.
-        video.muted =
-            Boolean(participant.local);
+        video.muted = Boolean(participant.local) || remoteAudioMuted;
 
         video.volume = 1.0;
 
@@ -210,7 +209,8 @@ const VideoTile = ({ participant }) => {
         participant.local,
         participant.name,
         hasVideo,
-        hasAudio
+        hasAudio,
+        remoteAudioMuted,
     ]);
 
     // ==========================================
@@ -312,7 +312,7 @@ const VideoTile = ({ participant }) => {
                     ref={videoRef}
                     autoPlay
                     playsInline
-                    muted={participant.local}
+                    muted={Boolean(participant.local) || remoteAudioMuted}
                     style={{
                         display: "none"
                     }}
@@ -344,7 +344,7 @@ const VideoTile = ({ participant }) => {
                     className="participant-video"
                     autoPlay
                     playsInline
-                    muted={participant.local}
+                    muted={Boolean(participant.local) || remoteAudioMuted}
                 />
 
             ) : (

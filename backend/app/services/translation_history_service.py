@@ -6,9 +6,10 @@ async def translation_history_service(user_id: str):
     translations = (
         await translations_collection
         .find(
-            {
-                "user_id": user_id
-            }
+            {"$or": [
+                {"user_id": user_id},
+                {"recipient_id": user_id},
+            ]}
         )
         .sort("created_at", -1)
         .limit(5)

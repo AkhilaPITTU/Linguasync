@@ -11,15 +11,19 @@ async def export_conversation_pdf_controller(meeting_id: str, authorization: str
     requester_id = get_user_id(authorization.split(" ", 1)[1])
     if not requester_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or Expired Token")
-    print("[EXPORT] request received")
-    print(f"[EXPORT] meeting_id: {meeting_id}")
-    print(f"[EXPORT] user_id: {requester_id}")
+    print(f"[conversation-export] request meeting_id={meeting_id} user_id={requester_id}")
     try:
         pdf_bytes, filename = await export_conversation_pdf(meeting_id, requester_id)
     except ConversationExportError as error:
-        print(f"[EXPORT ERROR] {error.message}")
+        print(
+            f"[conversation-export] failed meeting_id={meeting_id} "
+            f"stage=export error={type(error).__name__}"
+        )
         raise HTTPException(status_code=error.status_code, detail=error.message) from error
     except Exception as error:
-        print(f"[EXPORT ERROR] {type(error).__name__}: {error}")
+        print(
+            f"[conversation-export] failed meeting_id={meeting_id} "
+            f"stage=unexpected error={type(error).__name__}"
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to generate the conversation PDF.") from error
     return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": content_disposition(filename)})

@@ -423,6 +423,7 @@ class WebRTCService {
 
     toggleMicrophone(enabled) {
         if (!this.localStream) return;
+     
         this.localStream.getAudioTracks().forEach(track => {
             track.enabled = enabled;
             console.log("Microphone:", enabled);

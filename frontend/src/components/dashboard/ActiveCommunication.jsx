@@ -828,33 +828,6 @@ function ActiveCommunication() {
                                     Translated subtitles
                                 </label>
 
-                                <label>
-                                    <input
-                                        type="radio"
-                                        name="translation-output"
-                                        value="voice"
-                                        checked={selectedOutputMode === "voice"}
-                                        onChange={(event) => {
-                                            setSelectedOutputMode(event.target.value);
-                                            setPreferenceError("");
-                                        }}
-                                    />
-                                    Translated voice
-                                </label>
-
-                                <label>
-                                    <input
-                                        type="radio"
-                                        name="translation-output"
-                                        value="subtitle_voice"
-                                        checked={selectedOutputMode === "subtitle_voice"}
-                                        onChange={(event) => {
-                                            setSelectedOutputMode(event.target.value);
-                                            setPreferenceError("");
-                                        }}
-                                    />
-                                    Subtitles + translated voice
-                                </label>
                             </fieldset>
 
                             {preferenceError && (

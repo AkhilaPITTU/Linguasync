@@ -13,6 +13,8 @@ class AudioService {
         this.onChunk = null;
         this.mimeType = "audio/webm";
         this.chunkCount = 0;
+        this.muted = false;
+        this.pendingStopResolve = null;
 
     }
 
@@ -38,6 +40,7 @@ class AudioService {
         }
 
         this.onChunk = onChunk;
+        this.muted = false;
 
         try {
 
@@ -92,16 +95,28 @@ class AudioService {
 
     _recordCycle() {
 
-        if (!this.isRecording || !this.stream) {
+        if (!this.isRecording || this.muted || !this.stream) {
             return;
         }
 
-        this.mediaRecorder = this.mimeType
+        if (
+            this.mediaRecorder &&
+            this.mediaRecorder.state !== "inactive"
+        ) {
+            console.warn(
+                "[MIC-DEBUG] recorder cycle skipped; recorder is still active",
+                { state: this.mediaRecorder.state }
+            );
+            return;
+        }
+
+        const recorder = this.mimeType
             ? new MediaRecorder(this.stream, { mimeType: this.mimeType })
             : new MediaRecorder(this.stream);
+        this.mediaRecorder = recorder;
 
         const recorderMimeType =
-            this.mediaRecorder.mimeType || this.mimeType || "browser default";
+            recorder.mimeType || this.mimeType || "browser default";
 
         console.log("MediaRecorder started:", {
             mimeType: recorderMimeType,
@@ -110,7 +125,7 @@ class AudioService {
 
         const chunks = [];
 
-        this.mediaRecorder.ondataavailable = (event) => {
+        recorder.ondataavailable = (event) => {
 
             if (event.data && event.data.size > 0) {
                 chunks.push(event.data);
@@ -118,7 +133,7 @@ class AudioService {
 
         };
 
-        this.mediaRecorder.onerror = (event) => {
+        recorder.onerror = (event) => {
 
             console.error(
                 "MediaRecorder Error:",
@@ -127,7 +142,7 @@ class AudioService {
 
         };
 
-        this.mediaRecorder.onstop = async () => {
+        recorder.onstop = async () => {
 
             if (chunks.length > 0) {
 
@@ -146,8 +161,10 @@ class AudioService {
                         });
                     }
 
-                    if (typeof this.onChunk === "function") {
+                    if (!this.muted && typeof this.onChunk === "function") {
                         this.onChunk(arrayBuffer);
+                    } else if (this.muted) {
+                        console.log("[MIC] muted recorder chunk discarded");
                     }
 
                 } catch (error) {
@@ -165,19 +182,98 @@ class AudioService {
 
             }
 
-            if (this.isRecording) {
+            // A stopped recorder cannot be restarted. Clear this exact
+            // recorder reference before deciding whether to create the next
+            // cycle, while deliberately keeping the microphone stream alive.
+            if (this.mediaRecorder === recorder) {
+                this.mediaRecorder = null;
+            }
+
+            console.log("[MIC-DEBUG] recorder stopped", {
+                recorderState: recorder.state,
+                recording: this.isRecording,
+                muted: this.muted,
+                streamActive: this.stream?.active ?? false,
+            });
+
+            if (this.isRecording && !this.muted) {
                 this._recordCycle();
+            } else if (this.isRecording && this.muted) {
+                console.log(
+                    "[MIC-DEBUG] recorder paused for mute; microphone stream retained"
+                );
+            } else if (!this.isRecording) {
+                this._releaseStream();
+                this.pendingStopResolve?.();
+                this.pendingStopResolve = null;
             }
 
         };
 
-        this.mediaRecorder.start();
+        recorder.start();
 
     }
 
     // ==========================================
     // STOP RECORDING
     // ==========================================
+
+    _releaseStream() {
+        if (this.stream) {
+            this.stream.getTracks().forEach((track) => track.stop());
+            this.stream = null;
+        }
+        this.mediaRecorder = null;
+        this.onChunk = null;
+        this.chunkCount = 0;
+    }
+
+    setMuted(muted) {
+        this.muted = Boolean(muted);
+        const audioTracks = this.stream?.getAudioTracks() || [];
+        console.log(`[MIC-DEBUG] ${this.muted ? "mute" : "unmute"}`, {
+            audioTracks: audioTracks.length,
+            recorderState: this.mediaRecorder?.state ?? "none",
+            streamActive: this.stream?.active ?? false,
+        });
+        audioTracks.forEach((track, index) => {
+            track.enabled = !this.muted;
+            console.log("[MIC-DEBUG] recorder track", {
+                index,
+                readyState: track.readyState,
+                enabled: track.enabled,
+                muted: track.muted,
+            });
+        });
+
+        if (
+            this.muted &&
+            this.mediaRecorder &&
+            this.mediaRecorder.state !== "inactive"
+        ) {
+            this.mediaRecorder.stop();
+            return;
+        }
+
+        if (!this.muted) {
+            if (!this.stream?.active || audioTracks.some((track) => track.readyState !== "live")) {
+                console.error(
+                    "[MIC-DEBUG] cannot resume recorder: microphone stream is no longer live"
+                );
+                return;
+            }
+
+            // An inactive recorder is permanently stopped. It must not block
+            // the next cycle from being created with the same live stream.
+            if (this.mediaRecorder?.state === "inactive") {
+                this.mediaRecorder = null;
+            }
+
+            if (this.isRecording && !this.mediaRecorder) {
+                this._recordCycle();
+            }
+        }
+    }
 
     stopRecording() {
 
@@ -188,26 +284,23 @@ class AudioService {
             this.intervalId = null;
         }
 
-        if (
-            this.mediaRecorder &&
-            this.mediaRecorder.state !== "inactive"
-        ) {
-            this.mediaRecorder.stop();
-        }
-
-        if (this.stream) {
-
-            this.stream.getTracks().forEach(track => {
-                track.stop();
-            });
-
-            this.stream = null;
-
-        }
-
-        this.mediaRecorder = null;
-        this.onChunk = null;
-        this.chunkCount = 0;
+        return new Promise((resolve) => {
+            this.pendingStopResolve = resolve;
+            if (this.mediaRecorder) {
+                // `inactive` can mean that stop() has already been called
+                // and its asynchronous onstop handler is still assembling
+                // the final WebM blob. Do not release the stream/onChunk
+                // callback here; onstop owns the final chunk and resolves
+                // this promise after it is delivered.
+                if (this.mediaRecorder.state !== "inactive") {
+                    this.mediaRecorder.stop();
+                }
+            } else {
+                this._releaseStream();
+                this.pendingStopResolve?.();
+                this.pendingStopResolve = null;
+            }
+        });
 
     }
 
