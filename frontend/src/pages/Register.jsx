@@ -1,154 +1,160 @@
 import { useState } from "react";
+import { FiEye, FiEyeOff, FiGlobe, FiLock, FiMail, FiUser } from "react-icons/fi";
 import { Link, useNavigate } from "react-router-dom";
+
 import Popup from "../components/Popup";
 import api from "../services/api";
+import "./Auth.css";
 
 function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
-
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setFormError("");
 
-    if (!name || !email || !password) {
-      alert("All fields are required");
+    if (!name.trim() || !email.trim() || !password) {
+      setFormError("Complete all fields to create your account.");
       return;
     }
-
     if (!email.includes("@")) {
-      alert("Please enter a valid email");
+      setFormError("Enter a valid email address.");
       return;
     }
-
     if (password.length < 6) {
-      alert("Password must be at least 6 characters");
+      setFormError("Password must be at least 6 characters.");
       return;
     }
 
     try {
       setLoading(true);
-
-      const response = await api.post("/auth/register", {
+      await api.post("/auth/register", {
         full_name: name,
-        email: email,
-        password: password,
+        email,
+        password,
       });
 
-      console.log(response.data);
-
-      setLoading(false);
-
       setShowPopup(true);
-
       setName("");
       setEmail("");
       setPassword("");
-
-      setTimeout(() => {
+      window.setTimeout(() => {
         setShowPopup(false);
-        navigate("/");
-      }, 2000);
-
+        navigate("/login");
+      }, 1800);
     } catch (error) {
+      setFormError(
+        error.response?.data?.detail || "Unable to connect to the server. Please try again."
+      );
+    } finally {
       setLoading(false);
-
-      if (error.response) {
-        alert(error.response.data.detail);
-      } else {
-        alert("Unable to connect to backend.");
-      }
     }
   };
 
   return (
-    <>
-      <div className="login-container">
-
-        {/* Left Card */}
-
-        <div className="project-card">
-
-          <h1>🌐 LinguaSync</h1>
-
-          <p>
-            Join the next generation multilingual communication platform.
+    <main className="auth-page">
+      <section className="auth-shell" aria-labelledby="register-title">
+        <aside className="auth-intro">
+          <Link to="/" className="auth-brand" aria-label="LINGUASYNC home">
+            <FiGlobe aria-hidden="true" />
+            LINGUASYNC
+          </Link>
+          <p className="auth-eyebrow">MULTILINGUAL COMMUNICATION</p>
+          <h1>Make every conversation accessible.</h1>
+          <p className="auth-description">
+            Create your account to access a focused multilingual communication dashboard.
           </p>
-
-          <h3>Benefits</h3>
-
-          <ul>
-            <li>🌍 Global Communication</li>
-            <li>🎤 AI Speech Recognition</li>
-            <li>🔒 Secure Platform</li>
-            <li>👥 Video Meetings</li>
+          <ul className="auth-benefits">
+            <li>Choose your preferred output language</li>
+            <li>Keep communication history organized</li>
+            <li>Access your workspace from one dashboard</li>
           </ul>
+        </aside>
 
-        </div>
+        <div className="auth-card">
+          <Link to="/" className="auth-mobile-brand">LINGUASYNC</Link>
+          <p className="auth-eyebrow">CREATE ACCOUNT</p>
+          <h2 id="register-title">Join LINGUASYNC</h2>
+          <p className="auth-card-description">A few details are all you need to begin.</p>
 
-        {/* Right Card */}
+          <form className="auth-form" onSubmit={handleSubmit} noValidate>
+            <label htmlFor="register-name">Full name</label>
+            <div className="auth-input-wrap">
+              <FiUser aria-hidden="true" />
+              <input
+                id="register-name"
+                type="text"
+                autoComplete="name"
+                placeholder="Your full name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={loading}
+              />
+            </div>
 
-        <div className="login-card">
+            <label htmlFor="register-email">Email address</label>
+            <div className="auth-input-wrap">
+              <FiMail aria-hidden="true" />
+              <input
+                id="register-email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={loading}
+              />
+            </div>
 
-          <h2>Create Account</h2>
+            <label htmlFor="register-password">Password</label>
+            <div className="auth-input-wrap">
+              <FiLock aria-hidden="true" />
+              <input
+                id="register-password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <FiEyeOff /> : <FiEye />}
+              </button>
+            </div>
 
-          <form onSubmit={handleSubmit}>
+            {formError && <p className="auth-message error" role="alert">{formError}</p>}
 
-            <input
-              type="text"
-              placeholder="Full Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-
-            <input
-              type="email"
-              placeholder="Email Address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-
-            <button
-              className="login-btn"
-              type="submit"
-              disabled={loading}
-            >
-              {loading ? "Creating..." : "Register →"}
+            <button className="auth-submit" type="submit" disabled={loading}>
+              {loading ? "Creating account..." : "Create account"}
             </button>
-
           </form>
 
-          <p>
-            Already have an account?
-
-            <Link to="/">
-              <span> Login</span>
-            </Link>
-
+          <p className="auth-switch">
+            Already have an account? <Link to="/login">Sign in</Link>
           </p>
-
         </div>
-
-      </div>
+      </section>
 
       <Popup
         show={showPopup}
-        icon="🎉"
-        title="Registration Successful!"
-        message="Your account has been created successfully."
+        icon="✓"
+        title="Account created"
+        message="Your account is ready. Redirecting you to sign in."
       />
-    </>
+    </main>
   );
 }
 

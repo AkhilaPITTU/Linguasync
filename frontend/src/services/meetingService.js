@@ -1,138 +1,158 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000"
+  baseURL: API_BASE_URL,
 });
+
+// Helper to retrieve auth header
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("access_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+// Helper to sanitize IDs if stored with trailing markers (e.g., ":1")
+const getCleanUserId = () => {
+  const userId = localStorage.getItem("user_id");
+  if (!userId) return null;
+  return userId.includes(":") ? userId.split(":")[0] : userId;
+};
 
 // ===========================
 // Create Meeting
 // ===========================
-
 export const createMeeting = async (data) => {
+  const userId = getCleanUserId();
 
-    const token = localStorage.getItem("access_token");
-    const userId = localStorage.getItem("user_id");
+  const response = await API.post(
+    `/api/meeting/create?host_id=${userId}`,
+    data,
+    { headers: getAuthHeaders() }
+  );
 
-    const response = await API.post(
-        `/api/meeting/create?host_id=${userId}`,
-        data,
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }
-    );
-
-    return response.data;
-
+  return response.data;
 };
 
 // ===========================
 // Get Active Meeting
 // ===========================
-
 export const getActiveMeeting = async () => {
+  const response = await API.get("/api/meeting/active", {
+    headers: getAuthHeaders(),
+  });
 
-    const token = localStorage.getItem("access_token");
-
-    const response = await API.get(
-        "/api/meeting/active",
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }
-    );
-
-    return response.data;
-
+  return response.data;
 };
 
 // ===========================
 // Get Meeting Details
 // ===========================
-
 export const getMeeting = async (meetingId) => {
+  const response = await API.get(`/api/meeting/${meetingId}`, {
+    headers: getAuthHeaders(),
+  });
 
-    const token = localStorage.getItem("access_token");
-
-    const response = await API.get(
-        `/api/meeting/${meetingId}`,
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }
-    );
-
-    return response.data;
-
+  return response.data;
 };
 
 // ===========================
 // Get Participants
 // ===========================
-
 export const getParticipants = async (meetingId) => {
+  const response = await API.get(`/api/meeting/${meetingId}/participants`, {
+    headers: getAuthHeaders(),
+  });
 
-    const token = localStorage.getItem("access_token");
-
-    const response = await API.get(
-        `/api/meeting/${meetingId}/participants`,
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }
-    );
-
-    return response.data;
-
+  return response.data;
 };
 
 // ===========================
 // Leave Meeting
 // ===========================
-
 export const leaveMeeting = async (meetingId, userId) => {
+  const cleanId = userId ? userId.split(":")[0] : getCleanUserId();
 
-    const token = localStorage.getItem("access_token");
+  const response = await API.post(
+    "/api/meeting/leave",
+    {
+      meeting_id: meetingId,
+      user_id: cleanId,
+    },
+    { headers: getAuthHeaders() }
+  );
 
-    const response = await API.post(
-        "/api/meeting/leave",
-        {
-            meeting_id: meetingId,
-            user_id: userId
-        },
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }
-    );
-
-    return response.data;
-
+  return response.data;
 };
 
 // ===========================
 // End Meeting
 // ===========================
-
 export const endMeeting = async (meetingId) => {
+  const response = await API.put(
+    `/api/meeting/end/${meetingId}`,
+    {},
+    { headers: getAuthHeaders() }
+  );
 
-    const token = localStorage.getItem("access_token");
+  return response.data;
+};
 
-    const response = await API.put(
-        `/api/meeting/end/${meetingId}`,
-        {},
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        }
-    );
+// ===========================
+// Join Meeting
+// ===========================
+export const joinMeeting = async (
+  meetingId,
+  userName,
+  preferredLanguage,
+  outputMode,
+  sourceLanguage = null
+) => {
+  const userId = getCleanUserId();
 
-    return response.data;
+  // Passing user_id in BOTH query params and body to handle backend expectations safely
+  const response = await API.post(
+    `/api/meeting/join?user_id=${userId}`,
+    {
+      user_id: userId,
+      meeting_id: meetingId,
+      user_name: userName,
+      preferred_language: preferredLanguage,
+      source_language: sourceLanguage,
+      output_mode: outputMode,
+    },
+    { headers: getAuthHeaders() }
+  );
 
+  return response.data;
+};
+
+// ===========================
+// Export the authenticated participant's conversation PDF
+// ===========================
+export const exportConversationPdf = async (meetingId) => {
+  const response = await API.post(
+    `/api/meeting/${meetingId}/conversation-export`,
+    {},
+    {
+      headers: getAuthHeaders(),
+      responseType: "blob",
+    }
+  );
+
+  if (!response.data || response.data.size === 0) {
+    throw new Error("The server returned an empty PDF.");
+  }
+
+  const disposition = response.headers["content-disposition"] || "";
+  const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const filename = encodedName ? decodeURIComponent(encodedName) : `LINGUASYNC_Meeting_${meetingId}.pdf`;
+
+  const url = window.URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 };

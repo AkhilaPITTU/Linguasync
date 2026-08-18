@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getUserMediaSafely } from "../services/mediaDeviceService";
 
 export default function useMediaStream() {
     const videoRef = useRef(null);
@@ -15,7 +16,7 @@ export default function useMediaStream() {
 
             try {
 
-                const media = await navigator.mediaDevices.getUserMedia({
+                const media = await getUserMediaSafely({
                     video: true,
                     audio: true
                 });

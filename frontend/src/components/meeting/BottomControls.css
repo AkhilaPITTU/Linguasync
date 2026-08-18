@@ -128,3 +128,68 @@
     }
 
 }
+
+.leave-dialog-backdrop{
+
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    display:grid;
+    place-items:center;
+    padding:20px;
+    background:rgba(2,6,23,.72);
+    backdrop-filter:blur(4px);
+}
+
+.leave-dialog{
+
+    width:min(100%,460px);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:20px;
+    padding:28px;
+    background:#121827;
+    color:#fff;
+    box-shadow:0 24px 60px rgba(0,0,0,.45);
+}
+
+.leave-dialog h2{
+
+    margin:0;
+    font-size:22px;
+}
+
+.leave-dialog p{
+
+    margin:12px 0 24px;
+    color:#b9c3d6;
+    line-height:1.55;
+}
+
+.leave-dialog-actions{
+
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.leave-dialog-actions button{
+
+    border:0;
+    border-radius:10px;
+    padding:11px 14px;
+    color:#fff;
+    font-weight:600;
+}
+
+.leave-dialog-actions button:disabled{
+
+    cursor:not-allowed;
+    opacity:.65;
+}
+
+.leave-dialog-export{ background:#6c4dff; }
+.leave-dialog-export:hover:not(:disabled){ background:#5a3de3; }
+.leave-dialog-danger{ background:#dc2626; }
+.leave-dialog-danger:hover:not(:disabled){ background:#b91c1c; }
+.leave-dialog-cancel{ background:#293244; }
+.leave-dialog-cancel:hover:not(:disabled){ background:#3a465e; }

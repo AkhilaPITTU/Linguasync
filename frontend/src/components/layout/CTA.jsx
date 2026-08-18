@@ -26,17 +26,17 @@ export default function CTA() {
 
         <div className="cta-buttons">
 
-          <Link to="/create-room" className="primary-btn">
+          <Link to="/register" className="primary-btn">
 
             <MdMeetingRoom />
 
-            Create Meeting
+            Create an account
 
           </Link>
 
-          <Link to="/join-room" className="secondary-btn">
+          <Link to="/login" className="secondary-btn">
 
-            Join Meeting
+            Log in
 
             <FaArrowRight />
 

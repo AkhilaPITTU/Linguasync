@@ -1,6 +1,8 @@
 import os
 import tempfile
 
+import numpy as np
+
 from faster_whisper import WhisperModel
 
 
@@ -26,24 +28,67 @@ class WhisperService:
 
         return round(confidence, 2)
 
-    def transcribe(self, audio_bytes):
+    def transcribe(self, audio, vad_filter=True, language=None):
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".wemb"
-        ) as temp_audio:
+        if audio is None or (hasattr(audio, "size") and audio.size == 0) or (
+            isinstance(audio, (bytes, bytearray)) and not audio
+        ):
+            return {
+                "success": False,
+                "reason": "empty_audio",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
 
-            temp_audio.write(audio_bytes)
+        temp_path = None
 
-            temp_path = temp_audio.name
+        # The meeting pipeline supplies validated mono float32 PCM at 16 kHz.
+        # Retain WebM-file support for other existing callers.
+        if isinstance(audio, (bytes, bytearray)):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
+                temp_audio.write(audio)
+                temp_path = temp_audio.name
+            whisper_audio = temp_path
+        else:
+            # Faster-Whisper expects one-dimensional, normalized float audio
+            # when a NumPy array is supplied. The meeting decoder already
+            # provides 16 kHz mono PCM; this verifies that boundary without
+            # changing its amplitude.
+            whisper_audio = np.ascontiguousarray(
+                np.nan_to_num(
+                    np.asarray(audio, dtype=np.float32),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                ).reshape(-1)
+            )
 
         try:
 
-            segments, info = self.model.transcribe(
-                temp_path,
-                beam_size=5,
-                vad_filter=True
-            )
+            try:
+                segments, info = self.model.transcribe(
+                    whisper_audio,
+                    task="transcribe",
+                    beam_size=5,
+                    temperature=0.0,
+                    vad_filter=vad_filter,
+                    condition_on_previous_text=False,
+                    language=language or None,
+                )
+                # Faster-Whisper returns a lazy generator. Materialize it
+                # once before extracting text and diagnostics.
+                segments = list(segments)
+            except Exception as error:
+                return {
+                    "success": False,
+                    "reason": f"whisper_error: {error}",
+                    "language": None,
+                    "text": "",
+                    "confidence": 0,
+                    "segments": [],
+                }
 
             transcript = ""
 
@@ -75,7 +120,10 @@ class WhisperService:
 
                     "text": segment.text,
 
-                    "confidence": confidence
+                    "confidence": confidence,
+                    "avg_logprob": avg_logprob,
+                    "no_speech_prob": getattr(segment, "no_speech_prob", None),
+                    "compression_ratio": getattr(segment, "compression_ratio", None),
 
                 })
 
@@ -97,9 +145,22 @@ class WhisperService:
 
             )
 
+            detected_language = getattr(info, "language", None)
+            print(
+                f"[STT] transcript: {transcript.strip()!r} | "
+                f"configured_source_language: {language} | detected_language: {detected_language} | "
+                f"language_probability: {getattr(info, 'language_probability', None)}"
+            )
+
             return {
 
-                "language": info.language,
+                "success": True,
+
+                "language": detected_language,
+
+                "language_probability": getattr(
+                    info, "language_probability", None
+                ),
 
                 "text": transcript.strip(),
 
@@ -111,7 +172,7 @@ class WhisperService:
 
         finally:
 
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
 
                 os.remove(temp_path)
 
