@@ -1,9 +1,15 @@
 import { useState } from "react";
 import "./ChatPanel.css";
+import "@fontsource/noto-sans/400.css";
+import "@fontsource/noto-sans-telugu/400.css";
+import "@fontsource/noto-sans-devanagari/400.css";
 
 import websocketService from "../../services/websocketService";
+import { getLanguageCode } from "./languageCode";
 
-const ChatPanel = ({ messages = [] }) => {
+const SCRIPT_FONT_FAMILY = '"Noto Sans Telugu", "Noto Sans Devanagari", "Noto Sans", sans-serif';
+
+const ChatPanel = ({ messages = [], preferredLanguage = "English" }) => {
 
     const [message, setMessage] = useState("");
     const [sendError, setSendError] = useState("");
@@ -13,6 +19,7 @@ const ChatPanel = ({ messages = [] }) => {
     const userId = rawUserId.includes(":")
         ? rawUserId.split(":")[0]
         : rawUserId;
+    const inputLanguage = getLanguageCode(preferredLanguage);
 
     const sendMessage = () => {
 
@@ -31,7 +38,7 @@ const ChatPanel = ({ messages = [] }) => {
             // This is only a source-language hint for typed text. The
             // backend still uses the sender's persisted meeting setting if
             // the browser cannot provide one.
-            source_language: navigator.language?.split("-")[0],
+            source_language: inputLanguage,
 
             time: new Date().toLocaleTimeString([], {
                 hour: "2-digit",
@@ -100,7 +107,7 @@ const ChatPanel = ({ messages = [] }) => {
 
                                 </div>
 
-                                <p>
+                                <p lang={msg.source_language || inputLanguage} dir="auto" style={{ fontFamily: SCRIPT_FONT_FAMILY }}>
 
                                     {msg.text || msg.message}
 
@@ -124,6 +131,9 @@ const ChatPanel = ({ messages = [] }) => {
                 <input
                     type="text"
                     placeholder="Type a message..."
+                    lang={inputLanguage}
+                    dir="auto"
+                    style={{ fontFamily: SCRIPT_FONT_FAMILY }}
                     value={message}
                     onChange={(e) => {
                         setMessage(e.target.value);

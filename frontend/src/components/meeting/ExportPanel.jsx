@@ -1,14 +1,10 @@
 import "./ExportPanel.css";
-import { useState } from "react";
-import { showToast } from "../notification/toastService";
-import { exportMeetingChat } from "../../services/chatExportService";
 
 const ExportPanel = ({
-    meetingId,
     transcript = [],
     translations = [],
+    chatMessages = [],
 }) => {
-    const [isExportingChat, setIsExportingChat] = useState(false);
 
     const downloadJSON = (filename, data) => {
 
@@ -49,23 +45,15 @@ const ExportPanel = ({
 
     };
 
-    const exportChat = async () => {
-        if (isExportingChat) return;
-        if (!meetingId) {
-            showToast("Meeting information is unavailable for chat export.", "error");
-            return;
-        }
+    const exportChat = () => {
 
-        setIsExportingChat(true);
-        try {
-            const { messageCount } = await exportMeetingChat(meetingId);
-            showToast(`Exported ${messageCount} chat message${messageCount === 1 ? "" : "s"}.`);
-        } catch (error) {
-            console.error("Chat export failed:", error);
-            showToast(error.message || "Unable to export chat.", "error");
-        } finally {
-            setIsExportingChat(false);
-        }
+        downloadJSON(
+            "meeting_chat.json",
+            {
+                chatMessages,
+                exportedAt: new Date().toISOString(),
+            }
+        );
     };
 
     const exportMeetingLog = () => {
@@ -112,8 +100,8 @@ const ExportPanel = ({
 
                     <p>Download all meeting chat messages.</p>
 
-                    <button onClick={exportChat} disabled={isExportingChat}>
-                        {isExportingChat ? "Exporting..." : "Export Chat"}
+                    <button onClick={exportChat}>
+                        Export Chat
                     </button>
 
                 </div>

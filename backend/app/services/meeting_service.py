@@ -250,8 +250,10 @@ async def leave_meeting(
 
     participant_count = len(updated_meeting["participants"])
 
-    # If 0 or 1 participants remain, end the meeting
-    if participant_count <= 1:
+    # Leaving is distinct from ending a meeting. A remaining participant may
+    # still be waiting for others to join, so only an empty meeting is closed
+    # here; the host uses the explicit end endpoint to finish it for everyone.
+    if participant_count == 0:
 
         await meetings_collection.update_one(
             {
@@ -390,7 +392,6 @@ async def get_active_meeting(user_id: str):
             str(participant.get("user_id", ""))
             for participant in candidate.get("participants", [])
         ]
-        is_host = host_id == normalized_user_id
         is_participant = normalized_user_id in participant_ids
         print("========== ACTIVE MEETING CHECK ==========")
         print({
@@ -398,11 +399,14 @@ async def get_active_meeting(user_id: str):
             "meeting_id": candidate.get("meeting_id"),
             "host_id": host_id,
             "participants": participant_ids,
-            "is_host": is_host,
+            "is_host": host_id == normalized_user_id,
             "is_participant": is_participant,
-            "result": is_host or is_participant,
+            "result": is_participant,
         })
-        if is_host or is_participant:
+        # A host is initially a participant too. Requiring present
+        # membership prevents an old active record from resurfacing after
+        # that host has left a multi-party meeting.
+        if is_participant:
             meeting = candidate
             break
 

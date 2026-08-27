@@ -9,7 +9,6 @@ import ExportPanel from "./ExportPanel";
 import { resolveSpeakerName } from "./speakerName";
 
 const RightSidebar = ({
-    meetingId,
     participants = [],
     transcript = [],
     translations = [],
@@ -124,6 +123,7 @@ const RightSidebar = ({
                         transcript={transcript}
                         participants={participants}
                         translations={translations}
+                        preferredLanguage={language}
                         currentUserId={currentUserId}
                         onCorrectTranscript={onCorrectTranscript}
                     />
@@ -175,6 +175,7 @@ const RightSidebar = ({
                 {activeTab === "chat" && (
                     <ChatPanel
                         messages={chatMessages}
+                        preferredLanguage={language}
                     />
                 )}
 
@@ -191,9 +192,9 @@ const RightSidebar = ({
 
                 {activeTab === "export" && (
                     <ExportPanel
-                        meetingId={meetingId}
                         transcript={transcript}
                         translations={translations}
+                        chatMessages={chatMessages}
                     />
                 )}
 

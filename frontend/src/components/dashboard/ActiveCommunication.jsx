@@ -22,6 +22,10 @@ import {
     FiX
 } from "react-icons/fi";
 
+const clearStaleMeetingCache = () => {
+    localStorage.removeItem("meeting_id");
+    sessionStorage.removeItem("meeting_id");
+};
 
 function ActiveCommunication() {
 
@@ -39,7 +43,6 @@ function ActiveCommunication() {
         useState("");
 
     const navigate = useNavigate();
-
 
     // =====================================================
     // FETCH ACTIVE MEETING + PENDING INVITATIONS
@@ -95,6 +98,7 @@ function ActiveCommunication() {
                 else {
 
                     setActiveCall(null);
+                    clearStaleMeetingCache();
 
                     const inviteRes =
                         await getPendingInvitations();
@@ -155,6 +159,13 @@ function ActiveCommunication() {
 
         fetchData();
 
+        const handleMeetingStateCleared = () => {
+            clearStaleMeetingCache();
+            setActiveCall(null);
+        };
+
+        window.addEventListener("meeting-state-cleared", handleMeetingStateCleared);
+
 
         // Refresh every 3 seconds
         const interval = setInterval(
@@ -168,6 +179,7 @@ function ActiveCommunication() {
             mounted = false;
 
             clearInterval(interval);
+            window.removeEventListener("meeting-state-cleared", handleMeetingStateCleared);
 
         };
 

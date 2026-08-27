@@ -24,9 +24,11 @@ import webrtcService from "../../services/webrtcService";
 import websocketService from "../../services/websocketService";
 
 import {
-    exportConversationPdf,
     leaveMeeting as leaveMeetingAPI,
+    endMeeting as endMeetingAPI,
 } from "../../services/meetingService";
+import { exportConversationPdf } from "../../services/conversationPdfService";
+import { showToast } from "../notification/toastService";
 
 const BottomControls = ({
     onAddParticipants,
@@ -35,6 +37,14 @@ const BottomControls = ({
     onSpeakerChange = () => {},
     onMicrophoneChange = () => {},
     onBeforeLeave = async () => ({ flushed: false }),
+    transcript = [],
+    translations = [],
+    participants = [],
+    preferredLanguage = "English",
+    currentUserId,
+    microphoneMuted = false,
+    speakerMuted = false,
+    isMeetingHost = false,
 }) => {
 
     const navigate = useNavigate();
@@ -45,13 +55,12 @@ const BottomControls = ({
     const isVideoCall =
         !isAudioCall;
 
-    const [micOn, setMicOn] = useState(true);
+    const micOn = !microphoneMuted;
 
     const [cameraOn, setCameraOn] =
         useState(isVideoCall);
 
-    const [speakerOn, setSpeakerOn] =
-        useState(true);
+    const speakerOn = !speakerMuted;
 
     const [screenSharing, setScreenSharing] = useState(false);
 
@@ -86,16 +95,7 @@ const BottomControls = ({
 
     const toggleMic = () => {
 
-        const audioTracks = webrtcService.localStream?.getAudioTracks() || [];
-        if (audioTracks.length === 0) {
-            console.error("[MIC-DEBUG] cannot toggle microphone: no local audio track");
-            return;
-        }
-
-        const newState = !audioTracks.every((track) => track.enabled);
-
-        setMicOn(newState);
-        onMicrophoneChange(newState);
+        onMicrophoneChange(!micOn);
     };
 
     // ==========================================
@@ -150,11 +150,7 @@ const BottomControls = ({
 
     const toggleSpeaker = () => {
 
-        setSpeakerOn((prev) => {
-            const next = !prev;
-            onSpeakerChange(next);
-            return next;
-        });
+        onSpeakerChange(!speakerOn);
 
     };
 
@@ -213,12 +209,31 @@ const BottomControls = ({
 
             if (meetingId && userId) {
 
-                await leaveMeetingAPI(
-                    meetingId,
-                    userId
-                );
+                if (isMeetingHost) {
+                    await endMeetingAPI(meetingId, userId);
+                } else {
+                    await leaveMeetingAPI(meetingId, userId);
+                }
 
             }
+
+            // `meeting_id` is only a convenience used after creating a
+            // meeting. Do not let it point at a completed/left meeting.
+            if (localStorage.getItem("meeting_id") === meetingId) {
+                localStorage.removeItem("meeting_id");
+            }
+            if (sessionStorage.getItem("meeting_id") === meetingId) {
+                sessionStorage.removeItem("meeting_id");
+            }
+
+            // Keep any mounted dashboard view in this tab in sync with the
+            // completed leave/end request. The dashboard still verifies this
+            // state with the backend when it loads.
+            window.dispatchEvent(new CustomEvent("meeting-state-cleared"));
+
+            websocketService.disconnect();
+            webrtcService.closeConnection();
+            navigate("/dashboard");
 
         } catch (error) {
 
@@ -226,11 +241,8 @@ const BottomControls = ({
                 "Leave Meeting Error:",
                 error
             );
-
-        } finally {
-            websocketService.disconnect();
-            webrtcService.closeConnection();
-            navigate("/dashboard");
+            showToast("Unable to finalize the meeting. Please try again.");
+            setIsLeaving(false);
         }
 
     };
@@ -276,7 +288,14 @@ const BottomControls = ({
         try {
 
             await prepareForLeave();
-            await exportConversationPdf(meetingId);
+            const { entryCount } = await exportConversationPdf({
+                transcript,
+                translations,
+                preferredLanguage,
+                currentUserId: currentUserId || userId,
+                participants,
+            });
+            showToast(`Exported ${entryCount} conversation entr${entryCount === 1 ? "y" : "ies"}.`);
             setLeaveDialog(false);
             await completeLeave();
 
@@ -284,23 +303,9 @@ const BottomControls = ({
 
             let message = "Unable to export the conversation. Please try again or leave without saving.";
 
-            if (error.response?.data instanceof Blob) {
-
-                try {
-
-                    const payload = JSON.parse(await error.response.data.text());
-                    message = payload.detail || message;
-
-                } catch {
-
-                    // Keep the safe fallback message for a non-JSON error response.
-
-                }
-
-            }
+            message = error.message || message;
 
             console.error("[EXPORT ERROR]", {
-                status: error.response?.status,
                 message,
             });
 
@@ -325,10 +330,12 @@ const BottomControls = ({
                 {/* MICROPHONE */}
 
                 <button
+                    type="button"
                     className={`control-btn ${
                         micOn ? "active" : ""
                     }`}
                     onClick={toggleMic}
+                    aria-pressed={!micOn}
                     title={
                         micOn
                             ? "Mute Microphone"
@@ -348,6 +355,7 @@ const BottomControls = ({
                 {isVideoCall && (
 
                     <button
+                        type="button"
                         className={`control-btn ${
                             cameraOn ? "active" : ""
                         }`}
@@ -371,10 +379,12 @@ const BottomControls = ({
                 {/* SPEAKER */}
 
                 <button
+                    type="button"
                     className={`control-btn ${
                         speakerOn ? "active" : ""
                     }`}
                     onClick={toggleSpeaker}
+                    aria-pressed={!speakerOn}
                     title={
                         speakerOn
                             ? "Mute Speaker"
@@ -489,13 +499,13 @@ const BottomControls = ({
                 <button
                     className="leave-btn"
                     onClick={openLeaveDialog}
-                    title="Leave Meeting"
+                    title={isMeetingHost ? "End Meeting" : "Leave Meeting"}
                 >
 
                     <FaPhoneSlash />
 
                     <span>
-                        Leave
+                        {isMeetingHost ? "End" : "Leave"}
                     </span>
 
                 </button>

@@ -1,9 +1,10 @@
 import "./CallHistory.css";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../services/apiConfig";
 
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000"
+    baseURL: API_BASE_URL
 });
 
 const CallHistory = () => {

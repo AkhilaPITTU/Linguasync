@@ -100,6 +100,18 @@ const MeetingRoom = () => {
 
     const [mediaError, setMediaError] = useState("");
 
+    const [microphoneMuted, setMicrophoneMuted] = useState(false);
+
+    const microphoneMutedRef = useRef(false);
+
+    // Prevent delayed work from an old mount from changing the recorder used
+    // by the current meeting (especially in React Strict Mode).
+    const meetingSessionRef = useRef(0);
+
+    const [remoteAudioMuted, setRemoteAudioMuted] = useState(false);
+
+    const [isMeetingHost, setIsMeetingHost] = useState(false);
+
     const subtitleTimeoutsRef =
         useRef({});
 
@@ -176,6 +188,10 @@ const MeetingRoom = () => {
         }
 
         let mounted = true;
+        const meetingSession = ++meetingSessionRef.current;
+        const isCurrentSession = () => (
+            mounted && meetingSessionRef.current === meetingSession
+        );
 
         const initializeMeeting = async () => {
 
@@ -264,6 +280,8 @@ const MeetingRoom = () => {
                         savedParticipant?.output_mode ||
                         "none"
                     );
+                const participantSourceLanguage =
+                    getLanguageCode(participantLanguage);
 
                 console.log(
                     "===================================="
@@ -288,11 +306,19 @@ const MeetingRoom = () => {
                     "===================================="
                 );
 
-                if (!mounted) return;
+                if (!isCurrentSession()) return;
+
+                setIsMeetingHost(String(meeting?.host_id || "") === String(userId));
 
                 setMeetingType(
                     currentMeetingType
                 );
+                setLanguage(participantLanguage);
+
+                console.log("[ASR-LANGUAGE-TRACE]", {
+                    selectedLanguage: participantLanguage,
+                    sourceLanguage: participantSourceLanguage,
+                });
 
                 // ==========================================
                 // 2. START CORRECT MEDIA
@@ -325,6 +351,8 @@ const MeetingRoom = () => {
                     return;
                 }
 
+                if (!isCurrentSession()) return;
+
                 console.log(
                     "Local Stream Started"
                 );
@@ -338,6 +366,12 @@ const MeetingRoom = () => {
                     "Video Tracks:",
                     stream.getVideoTracks().length
                 );
+
+                const initialMicrophoneMuted = !stream.getAudioTracks().some(
+                    (track) => track.readyState === "live" && track.enabled
+                );
+                microphoneMutedRef.current = initialMicrophoneMuted;
+                setMicrophoneMuted(initialMicrophoneMuted);
 
                 // ==========================================
                 // 3. LOCAL PARTICIPANT
@@ -354,7 +388,7 @@ const MeetingRoom = () => {
                         language: participantLanguage,
 
                         mic:
-                            stream.getAudioTracks().length > 0,
+                            !initialMicrophoneMuted,
 
                         camera:
                             isVideoMeeting &&
@@ -375,6 +409,8 @@ const MeetingRoom = () => {
                     participantOutputMode,
                     getLanguageCode(participantLanguage)
                 );
+
+                if (!isCurrentSession()) return;
 
                 // ==========================================
                 // 5. KNOWN PARTICIPANT NAMES
@@ -984,6 +1020,16 @@ const MeetingRoom = () => {
                                 break;
                             }
 
+                            case "conversation_flush_complete": {
+
+                                console.log("[conversation-save] flush confirmed", {
+                                    meetingId: data.meeting_id,
+                                    flushed: data.flushed,
+                                });
+
+                                break;
+                            }
+
                             // ==================================
                             // TRANSCRIPT CORRECTION
                             // ==================================
@@ -1127,8 +1173,15 @@ const MeetingRoom = () => {
                         )
                 );
 
+                if (!isCurrentSession()) return;
+
                 await audioService.startRecording(
                     (audioChunk) => {
+
+                        if (microphoneMutedRef.current) {
+                            console.log("[MIC-DEBUG] audio chunk ignored while muted");
+                            return;
+                        }
 
                         const now =
                             Date.now();
@@ -1164,6 +1217,7 @@ const MeetingRoom = () => {
                                     number:
                                         sentAudioChunkCountRef.current,
                                     bytes: audioChunk.byteLength,
+                                    sourceLanguage: participantSourceLanguage,
                                 });
                             }
 
@@ -1177,6 +1231,9 @@ const MeetingRoom = () => {
 
                                     user_id:
                                         userId,
+
+                                    source_language:
+                                        participantSourceLanguage,
 
                                     audio:
                                         Array.from(
@@ -1192,8 +1249,13 @@ const MeetingRoom = () => {
                                 "Audio chunk not sent: WebSocket is not open."
                             );
                         }
-                    }
+                    },
+                    stream
                 );
+
+                if (microphoneMutedRef.current) {
+                    audioService.setMuted(true);
+                }
 
             } catch (error) {
 
@@ -1214,11 +1276,13 @@ const MeetingRoom = () => {
 
             mounted = false;
 
-            audioService.stopRecording();
+            audioService.stopRecording("MeetingRoom cleanup");
 
             websocketService.disconnect();
 
-            webrtcService.closeAllConnections();
+            // Also clear the service's localStream reference. Otherwise a
+            // later join could reuse the stopped tracks from this meeting.
+            webrtcService.closeConnection();
 
             Object.values(
                 subtitleTimeoutsRef.current
@@ -1301,6 +1365,7 @@ const MeetingRoom = () => {
                         participants={
                             participants
                         }
+                        remoteAudioMuted={remoteAudioMuted}
                     />
 
                 </section>
@@ -1354,6 +1419,56 @@ const MeetingRoom = () => {
                 participants={
                     participants
                 }
+
+                transcript={transcript}
+
+                translations={translations}
+
+                preferredLanguage={language}
+
+                currentUserId={userId}
+
+                microphoneMuted={microphoneMuted}
+
+                speakerMuted={remoteAudioMuted}
+
+                isMeetingHost={isMeetingHost}
+
+                onBeforeLeave={async () => {
+                    // Stop accepting fresh mic samples, then let the active
+                    // recorder flush its final complete chunk before asking
+                    // the backend to drain STT/translation work.
+                    webrtcService.setMicrophoneMuted(true);
+                    // Keep the recorder callback eligible until stopRecording
+                    // delivers its already-captured final chunk. The track is
+                    // disabled above, so no new microphone speech is added.
+                    await audioService.stopRecording("meeting leave flush");
+                    return websocketService.flushConversation();
+                }}
+
+                onMicrophoneChange={(enabled) => {
+                    const result = webrtcService.setMicrophoneMuted(!enabled);
+
+                    if (!result.changed) {
+                        return;
+                    }
+
+                    const { muted } = result;
+                    microphoneMutedRef.current = muted;
+                    audioService.setMuted(muted);
+                    setMicrophoneMuted(muted);
+                    setParticipants((previous) => previous.map((participant) => (
+                        participant.local ? { ...participant, mic: !muted } : participant
+                    )));
+                    websocketService.send({
+                        type: "microphone_state",
+                        muted,
+                    });
+                }}
+
+                onSpeakerChange={(enabled) => {
+                    setRemoteAudioMuted(!enabled);
+                }}
 
                 meetingId={
                     meetingId

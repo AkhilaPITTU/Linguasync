@@ -4,6 +4,47 @@ import {
     getUserMediaSafely,
 } from "./mediaDeviceService";
 
+// Builds the RTCPeerConnection ICE server list: the existing public
+// STUN server plus, when configured, a TURN/TURNS relay for networks
+// where a direct peer-to-peer path isn't reachable (mobile data,
+// symmetric NAT, restrictive firewalls). Credentials are always read
+// from environment variables, never hardcoded.
+const buildIceServers = () => {
+
+    const iceServers = [
+        {
+            urls: "stun:stun.l.google.com:19302",
+        },
+    ];
+
+    const turnUrls = (import.meta.env.VITE_TURN_URLS || "")
+        .split(",")
+        .map((url) => url.trim())
+        .filter(Boolean);
+
+    if (turnUrls.length > 0) {
+
+        const turnServer = {
+            urls: turnUrls,
+        };
+
+        const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+        const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+        if (turnUsername) {
+            turnServer.username = turnUsername;
+        }
+
+        if (turnCredential) {
+            turnServer.credential = turnCredential;
+        }
+
+        iceServers.push(turnServer);
+    }
+
+    return iceServers;
+};
+
 class WebRTCService {
 
     constructor() {
@@ -11,13 +52,10 @@ class WebRTCService {
         this.peerConnections = {};
         this.pendingIceCandidates = {};
         this.localStream = null;
+        this.microphoneMuted = false;
 
         this.configuration = {
-            iceServers: [
-                {
-                    urls: "stun:stun.l.google.com:19302",
-                }
-            ],
+            iceServers: buildIceServers(),
         };
     }
 
@@ -45,11 +83,19 @@ class WebRTCService {
 
             this.localStream.getAudioTracks().forEach(track => {
                 console.log("MIC TRACK:", {
+                    id: track.id,
+                    kind: track.kind,
                     enabled: track.enabled,
                     muted: track.muted,
-                    readyState: track.readyState
+                    readyState: track.readyState,
+                    streamActive: this.localStream.active,
+                    settings: track.getSettings(),
                 });
             });
+
+            this.microphoneMuted = !this.localStream.getAudioTracks().some(
+                (track) => track.readyState === "live" && track.enabled
+            );
 
             if (this.localStream.getAudioTracks().length === 0) {
                 console.warn("⚠️ No audio track captured from getUserMedia(). Mic permission or hardware issue.");
@@ -399,6 +445,7 @@ class WebRTCService {
             this.localStream.getTracks().forEach(track => track.stop());
             this.localStream = null;
         }
+        this.microphoneMuted = false;
     }
 
     getPeerConnection(targetUserId) {
@@ -421,13 +468,44 @@ class WebRTCService {
         return this.localStream;
     }
 
-    toggleMicrophone(enabled) {
-        if (!this.localStream) return;
-     
-        this.localStream.getAudioTracks().forEach(track => {
-            track.enabled = enabled;
-            console.log("Microphone:", enabled);
+    setMicrophoneMuted(muted) {
+        const liveAudioTracks = (this.localStream?.getAudioTracks() || []).filter(
+            (track) => track.readyState === "live"
+        );
+
+        if (!liveAudioTracks.length) {
+            console.warn("Cannot change microphone state: no live local audio track.");
+            return {
+                changed: false,
+                muted: this.microphoneMuted,
+            };
+        }
+
+        liveAudioTracks.forEach((track) => {
+            track.enabled = !muted;
         });
+
+        // The track is the source of truth. Keep the cached value only as a
+        // convenient synchronous read for callers that need to update UI.
+        this.microphoneMuted = !liveAudioTracks.some((track) => track.enabled);
+
+        console.log(`[MIC-DEBUG] ${this.microphoneMuted ? "mute" : "unmute"}`, {
+            streamActive: this.localStream?.active ?? false,
+            audioTracks: liveAudioTracks.map((track) => ({
+                enabled: track.enabled,
+                readyState: track.readyState,
+                muted: track.muted,
+            })),
+        });
+
+        return {
+            changed: true,
+            muted: this.microphoneMuted,
+        };
+    }
+
+    toggleMicrophone(enabled) {
+        return this.setMicrophoneMuted(!enabled);
     }
 
     toggleCamera(enabled) {

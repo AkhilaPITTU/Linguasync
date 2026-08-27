@@ -68,6 +68,10 @@ class WhisperService:
         try:
 
             try:
+                print(
+                    f"[WHISPER-LANGUAGE-TRACE] task=transcribe "
+                    f"requested_language={language or None}"
+                )
                 segments, info = self.model.transcribe(
                     whisper_audio,
                     task="transcribe",
@@ -146,10 +150,11 @@ class WhisperService:
             )
 
             detected_language = getattr(info, "language", None)
+            detected_probability = getattr(info, "language_probability", None)
             print(
-                f"[STT] transcript: {transcript.strip()!r} | "
-                f"configured_source_language: {language} | detected_language: {detected_language} | "
-                f"language_probability: {getattr(info, 'language_probability', None)}"
+                f"[WHISPER-LANGUAGE-TRACE] requested_language={language or None} "
+                f"detected_language={detected_language} "
+                f"language_probability={detected_probability}"
             )
 
             return {

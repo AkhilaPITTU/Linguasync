@@ -161,10 +161,20 @@ async def _process_audio_chunk(
         stored_preferred_language = speaker.get(
             "preferred_language", speaker.get("language", "")
         )
+        received_source_language = translation_service.get_language_code(
+            data.get("source_language")
+        )
         configured_source_language = translation_service.get_language_code(
             stored_preferred_language
         ) or translation_service.get_language_code(
             speaker.get("source_language")
+        )
+
+        print(
+            f"[ASR-LANGUAGE-TRACE] chunk_id={chunk_id} user_id={user_id} "
+            f"websocket_source_language={received_source_language} "
+            f"persisted_preferred_language={stored_preferred_language} "
+            f"whisper_language={configured_source_language}"
         )
 
         print(
@@ -319,8 +329,12 @@ async def _process_audio_chunk(
             transcript
         )
         grammar_seconds = perf_counter() - grammar_started_at
-        transcript = grammar_result["corrected_text"]
+        transcript = (grammar_result.get("corrected_text") or "").strip()
         grammar_modified = grammar_result["modified"]
+
+        if not transcript:
+            print(f"[audio:{chunk_id}] grammar produced empty text; persistence skipped.")
+            return
 
         print(
             f"[GRAMMAR] chunk_id={chunk_id} input_text="
@@ -363,7 +377,9 @@ async def _process_audio_chunk(
             {"$set": {
                 "meeting_id": meeting_id, "chunk_id": chunk_id,
                 "speaker_id": user_id, "speaker_name": user_name,
-                "language": translation_source_language, "original_text": grammar_result["original_text"],
+                "language": translation_source_language,
+                "source_language": translation_source_language,
+                "original_text": grammar_result["original_text"],
                 "text": transcript, "is_corrected": False,
                 "created_at": datetime.now(timezone.utc),
             }},
@@ -638,7 +654,13 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                     f"reason={result.get('reason')}"
                 )
                 continue
-            translated_text = result["translated_text"]
+            translated_text = (result.get("translated_text") or "").strip()
+            if not translated_text:
+                print(
+                    f"[translation-routing] chunk_id={chunk_id} recipient_id={recipient_id} "
+                    "delivered=False reason=empty_translation"
+                )
+                continue
             try:
                 save_result = await translations_collection.update_one(
                     {

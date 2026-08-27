@@ -1,11 +1,18 @@
 import { useState } from "react";
 import "./TranscriptPanel.css";
+import "@fontsource/noto-sans/400.css";
+import "@fontsource/noto-sans-telugu/400.css";
+import "@fontsource/noto-sans-devanagari/400.css";
 import { resolveSpeakerName } from "./speakerName";
+import { getLanguageCode } from "./languageCode";
+
+const SCRIPT_FONT_FAMILY = '"Noto Sans Telugu", "Noto Sans Devanagari", "Noto Sans", sans-serif';
 
 const TranscriptPanel = ({
     transcript = [],
     currentUserId,
     participants = [],
+    preferredLanguage = "English",
     onCorrectTranscript = () => {},
 }) => {
 
@@ -48,7 +55,12 @@ const TranscriptPanel = ({
 
                     ) : (
 
-                        transcript.map((item, index) => (
+                        transcript.map((item, index) => {
+                            const textLanguage = getLanguageCode(
+                                item.source_language || item.language || preferredLanguage
+                            );
+
+                            return (
 
                             <div
                                 className="transcript-card"
@@ -86,6 +98,9 @@ const TranscriptPanel = ({
                                         <textarea
                                             value={draft}
                                             onChange={(event) => setDraft(event.target.value)}
+                                            lang={textLanguage}
+                                            dir="auto"
+                                            style={{ fontFamily: SCRIPT_FONT_FAMILY }}
                                             maxLength={2000}
                                         />
                                         <button
@@ -100,7 +115,7 @@ const TranscriptPanel = ({
                                     </div>
                                 ) : (
                                     <>
-                                        <p>{item.text || ""}</p>
+                                        <p lang={textLanguage} dir="auto" style={{ fontFamily: SCRIPT_FONT_FAMILY }}>{item.text || ""}</p>
                                         {item.is_corrected && (
                                             <small className="transcript-edited">(edited)</small>
                                         )}
@@ -117,7 +132,8 @@ const TranscriptPanel = ({
 
                             </div>
 
-                        ))
+                            );
+                        })
 
                     )
                 }
