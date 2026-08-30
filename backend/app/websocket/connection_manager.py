@@ -1,4 +1,5 @@
 from collections import defaultdict
+import os
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
@@ -91,6 +92,14 @@ class ConnectionManager:
             {}
         ).get(user_id)
 
+        print(
+            f"[SUBTITLE-WS-SEND] pid={os.getpid()} meeting_id={meeting_id} "
+            f"recipient_id={user_id} connection_found={websocket is not None} "
+            f"connection_id={id(websocket) if websocket is not None else None} "
+            f"message_type={message.get('type')} payload_recipient_id="
+            f"{message.get('recipient_id')}"
+        )
+
         if websocket is None:
             return False
 
@@ -98,9 +107,19 @@ class ConnectionManager:
 
             if websocket.client_state == WebSocketState.CONNECTED:
                 await websocket.send_json(message)
+                print(
+                    f"[SUBTITLE-WS-SEND] pid={os.getpid()} meeting_id={meeting_id} "
+                    f"recipient_id={user_id} connection_id={id(websocket)} sent=True"
+                )
                 return True
 
-        except Exception:
+        except Exception as error:
+
+            print(
+                f"[SUBTITLE-WS-SEND] pid={os.getpid()} meeting_id={meeting_id} "
+                f"recipient_id={user_id} connection_id={id(websocket)} sent=False "
+                f"exception={type(error).__name__}: {error}"
+            )
 
             # Use the socket captured above. A reconnect may replace this
             # mapping while send_json is awaiting, and the old socket must

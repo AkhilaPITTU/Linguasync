@@ -153,8 +153,6 @@ function ProfileOverview() {
                             >
                                 <option value="none">No translation</option>
                                 <option value="subtitle">Translated subtitles</option>
-                                <option value="voice">Translated voice</option>
-                                <option value="subtitle_voice">Subtitles + translated voice</option>
                             </select>
                         </label>
                         <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>

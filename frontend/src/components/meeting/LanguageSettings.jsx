@@ -3,19 +3,23 @@ import "./LanguageSettings.css";
 import { getLanguageCode } from "./languageCode";
 import { showToast } from "../notification/toastService";
 
+// Matches backend/app/ai/translation_service.py's LANGUAGE_CONFIG exactly --
+// these are the only languages the translation engine can actually
+// translate. Offering any language not in that list here silently breaks
+// recipient-specific subtitle translation for that participant.
 const languages = [
     "English",
-    "Spanish",
-    "French",
-    "German",
-    "Hindi",
     "Telugu",
+    "Hindi",
     "Tamil",
-    "Chinese",
-    "Japanese",
-    "Korean",
-    "Arabic",
+    "Kannada",
+    "Malayalam",
+    "Bengali",
+    "Marathi",
+    "Gujarati",
+    "Punjabi",
     "Urdu",
+    "Odia",
 ];
 
 const LanguageSettings = ({

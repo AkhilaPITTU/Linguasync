@@ -22,10 +22,14 @@ import { getLanguageCode } from "../components/meeting/languageCode";
 // Minimum time between audio_stream sends
 const AUDIO_SEND_INTERVAL_MS = 1000;
 
+// Translated voice/TTS output has been removed entirely: the original
+// speaker's audio is always preserved via WebRTC, and translation only
+// ever applies to the text/subtitle layer. Legacy voice-related aliases
+// are therefore mapped onto "subtitle" instead of a voice mode.
 const legacyOutputModeToPreference = (mode) => {
 
     if (
-        ["none", "transcription", "subtitle", "voice", "subtitle_voice"]
+        ["none", "transcription", "subtitle"]
             .includes(mode)
     ) {
         return mode;
@@ -34,9 +38,9 @@ const legacyOutputModeToPreference = (mode) => {
     const modes = {
         original: "none",
         text: "subtitle",
-        speech: "voice",
-        translated_speech: "voice",
-        text_speech: "subtitle_voice",
+        speech: "subtitle",
+        translated_speech: "subtitle",
+        text_speech: "subtitle",
     };
 
     return modes[mode] || "none";
@@ -882,6 +886,15 @@ const MeetingRoom = () => {
 
                             case "translation": {
 
+                                console.log("[SUBTITLE-CLIENT] incoming", {
+                                    currentUserId: userId,
+                                    recipientId: data.recipient_id,
+                                    speakerId: data.speaker_id || data.user_id,
+                                    targetLanguage: data.target_language,
+                                    isSubtitle: data.is_subtitle,
+                                    accepted: data.recipient_id === userId,
+                                });
+
                                 // Translation events are sent privately by
                                 // the backend. Keep this guard so a future
                                 // broadcast cannot show another recipient's
@@ -922,12 +935,28 @@ const MeetingRoom = () => {
                                         );
 
                                         if (existingIndex === -1) {
-                                            return [...prev, data];
+                                            const next = [...prev, data];
+                                            console.log("[SUBTITLE-CLIENT] state", {
+                                                currentUserId: userId,
+                                                chunkId: data.chunk_id,
+                                                recipientId: data.recipient_id,
+                                                translationsLength: next.length,
+                                                action: "append",
+                                            });
+                                            return next;
                                         }
 
-                                        return prev.map((entry, index) =>
+                                        const next = prev.map((entry, index) =>
                                             index === existingIndex ? data : entry
                                         );
+                                        console.log("[SUBTITLE-CLIENT] state", {
+                                            currentUserId: userId,
+                                            chunkId: data.chunk_id,
+                                            recipientId: data.recipient_id,
+                                            translationsLength: next.length,
+                                            action: "replace",
+                                        });
+                                        return next;
                                     }
                                 );
 
@@ -999,23 +1028,9 @@ const MeetingRoom = () => {
                                         );
                                 }
 
-                                if (data.audio_url) {
-
-                                    const apiBaseUrl = API_BASE_URL;
-
-                                    const translatedAudio = new Audio(
-                                        `${apiBaseUrl.replace(/\/$/, "")}${data.audio_url}`
-                                    );
-
-                                    translatedAudio.play().catch(
-                                        (error) => {
-                                            console.warn(
-                                                "Translated audio playback failed:",
-                                                error
-                                            );
-                                        }
-                                    );
-                                }
+                                // Translated voice/TTS is never generated or played back:
+                                // the original speaker's audio is always preserved via
+                                // WebRTC, and translation applies only to subtitles.
 
                                 break;
                             }

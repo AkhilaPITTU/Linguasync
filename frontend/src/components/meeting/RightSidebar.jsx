@@ -158,11 +158,7 @@ const RightSidebar = ({
                                                 {item.target_language || "Translation"}
                                             </span>
                                         </div>
-                                        <small>
-                                            {item.output_mode === "subtitle_voice"
-                                                ? "Subtitles + voice"
-                                                : "Subtitle"}
-                                        </small>
+                                        <small>Subtitle</small>
                                     </div>
                                     <p>{item.text}</p>
                                 </article>

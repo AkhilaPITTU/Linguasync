@@ -20,7 +20,6 @@ from app.services.grammar_correction_service import grammar_correction_service
 from app.services.confidence_service import confidence_service
 from app.services.human_review_service import human_review_service
 from app.services.ai_feedback_service import ai_feedback_service
-from app.services.text_to_speech_service import text_to_speech_service
 
 router = APIRouter()
 
@@ -63,15 +62,21 @@ def _get_user_name(meeting: dict, user_id: str) -> str:
 
 
 def _normalize_output_mode(mode: str) -> str:
-    """Support existing meeting modes while using per-call preferences."""
+    """Support existing meeting modes while using per-call preferences.
+
+    Translated voice/TTS output has been removed entirely: the original
+    speaker's audio is always preserved via WebRTC, and translation only
+    ever applies to the text/subtitle layer. Legacy voice-related aliases
+    are therefore mapped onto "subtitle" instead of a voice mode.
+    """
     return {
         "original": "none",
         "text": "subtitle",
-        "speech": "voice",
-        "translated_speech": "voice",
-        "text_speech": "subtitle_voice",
+        "speech": "subtitle",
+        "translated_speech": "subtitle",
+        "text_speech": "subtitle",
     }.get(mode, mode if mode in {
-        "none", "transcription", "subtitle", "voice", "subtitle_voice"
+        "none", "transcription", "subtitle"
     } else "none")
 
 
@@ -598,10 +603,27 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
         {"meeting_id": meeting_id}, {"_id": 0, "participants": 1}
     )
     connected_ids = set(manager.get_participants(meeting_id))
-    recipients_by_language = {}
+    print(
+        f"[SUBTITLE-RUNTIME] pid={os.getpid()} meeting_id={meeting_id} "
+        f"speaker_id={job['user_id']} detected_language={job['detected_language']} "
+        f"transcript={job['transcript']!r} connected_ids={sorted(connected_ids)}"
+    )
+    recipients = []
     for participant in (participants_doc or {}).get("participants", []):
         recipient_id = participant.get("user_id")
+        connection_exists = recipient_id in connected_ids
+        print(
+            f"[SUBTITLE-PARTICIPANT] pid={os.getpid()} meeting_id={meeting_id} "
+            f"speaker_id={job['user_id']} recipient_id={recipient_id} "
+            f"preferred_language={participant.get('preferred_language', participant.get('language'))!r} "
+            f"output_mode={participant.get('output_mode', 'none')!r} "
+            f"connected={connection_exists}"
+        )
         if recipient_id not in connected_ids:
+            print(
+                f"[SUBTITLE-PARTICIPANT] recipient_id={recipient_id} selected=False "
+                "condition=recipient_id_not_in_connection_manager"
+            )
             continue
         language = participant.get("preferred_language", participant.get("language"))
         output_mode = _normalize_output_mode(participant.get("output_mode", "none"))
@@ -611,26 +633,35 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
             f"recipient_name={name!r} preferred_language={language} "
             f"output_mode={output_mode}"
         )
-        # The speaker already receives the recipient-independent original
-        # transcript. Translation events are only for other recipients.
-        if (
-            recipient_id != job["user_id"] and
-            output_mode in {"subtitle", "voice", "subtitle_voice"}
-        ):
-            recipients_by_language.setdefault(language, []).append(
-                (recipient_id, name, output_mode)
-            )
+        # Every connected participant needs a subtitle in that participant's
+        # own preferred language. `output_mode` is a saved UI preference, not
+        # a routing permission: filtering on it caused the default "none"
+        # value to suppress translations for every recipient except a speaker
+        # who had explicitly selected subtitles. Keep the saved value for
+        # diagnostics, but always deliver this text-only subtitle event.
+        recipients.append((recipient_id, name, language, output_mode))
 
-    async def translate_and_deliver(language, recipients):
+    print(
+        f"[SUBTITLE-RECIPIENTS] pid={os.getpid()} meeting_id={meeting_id} "
+        f"speaker_id={job['user_id']} selected_recipient_ids="
+        f"{[recipient_id for recipient_id, _name, _language, _output_mode in recipients]}"
+    )
+
+    async def translate_and_deliver(
+        recipient_id: str,
+        recipient_name: str,
+        language: str,
+        recipient_output_mode: str,
+    ):
         target_code = translation_service.get_language_code(language)
         started = perf_counter()
-        for recipient_id, _recipient_name, _output_mode in recipients:
-            print(
-                f"[TRANSLATION-DEBUG] recipient_id={recipient_id} "
-                f"preferred_language={language!r} "
-                f"target_language_code={target_code!r} "
-                f"source_language={job['detected_language']!r}"
-            )
+        print(
+            f"[TRANSLATION-DEBUG] speaker_id={job['user_id']} "
+            f"recipient_id={recipient_id} preferred_language={language!r} "
+            f"recipient_output_mode={recipient_output_mode} "
+            f"target_language_code={target_code!r} "
+            f"source_language={job['detected_language']!r}"
+        )
         if not target_code:
             result = {"success": False, "reason": "unsupported_recipient_language"}
         else:
@@ -644,99 +675,99 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                     target_lang=target_code,
                 )
         elapsed = perf_counter() - started
-        for recipient_id, recipient_name, output_mode in recipients:
-            if not result.get("success"):
-                print(
-                    f"[translation-routing] chunk_id={chunk_id} speaker_id={job['user_id']} "
-                    f"recipient_id={recipient_id} recipient_name={recipient_name!r} "
-                    f"preferred_language={language} target_language={language} "
-                    f"output_mode={output_mode} elapsed={elapsed:.2f}s delivered=False "
-                    f"reason={result.get('reason')}"
-                )
-                continue
-            translated_text = (result.get("translated_text") or "").strip()
-            if not translated_text:
-                print(
-                    f"[translation-routing] chunk_id={chunk_id} recipient_id={recipient_id} "
-                    "delivered=False reason=empty_translation"
-                )
-                continue
-            try:
-                save_result = await translations_collection.update_one(
-                    {
-                        "meeting_id": meeting_id,
-                        "chunk_id": chunk_id,
-                        "user_id": recipient_id,
-                    },
-                    {"$set": {
-                        "meeting_id": meeting_id,
-                        "chunk_id": chunk_id,
-                        "user_id": recipient_id,
-                        "recipient_id": recipient_id,
-                        "speaker_id": job["user_id"],
-                        "speaker_name": job["user_name"],
-                        "source_language": job["detected_language"],
-                        "target_language": language,
-                        "source_text": job["transcript"],
-                        "translated_text": translated_text,
-                        "text": translated_text,
-                        "translation_type": "Speech",
-                        "word_count": len(translated_text.split()),
-                        "created_at": datetime.now(timezone.utc),
-                    }},
-                    upsert=True,
-                )
-                print(
-                    f"[conversation-save] type=translation meeting_id={meeting_id} "
-                    f"user_id={recipient_id} chunk_id={chunk_id} saved=True "
-                    f"matched={save_result.matched_count} upserted={save_result.upserted_id is not None}"
-                )
-            except Exception as error:
-                print(
-                    f"[conversation-save] type=translation meeting_id={meeting_id} "
-                    f"user_id={recipient_id} chunk_id={chunk_id} saved=False "
-                    f"error={type(error).__name__}: {error}"
-                )
-            audio_url = None
-            if output_mode in {"voice", "subtitle_voice"}:
-                try:
-                    tts = await text_to_speech_service.text_to_speech(translated_text, target_code)
-                    if tts.get("success"):
-                        audio_url = f"/generated_audio/{tts['filename']}"
-                except Exception as error:
-                    print(f"[translation:{chunk_id}] TTS failed recipient={recipient_id}: {error}")
-            delivered = await manager.send_personal_message(
-                {
-                    "type": "translation", "chunk_id": chunk_id,
-                    "user_id": job["user_id"], "speaker_id": job["user_id"],
-                    "user_name": job["user_name"], "speaker_name": job["user_name"],
-                    "recipient_id": recipient_id, "source_language": job["detected_language"],
-                    "target_language": language, "output_mode": output_mode,
-                    "is_subtitle": output_mode in {"subtitle", "subtitle_voice"},
-                    "text": translated_text if output_mode in {"subtitle", "subtitle_voice"} else "",
-                    "source_text": job["transcript"],
-                    "translated_text": translated_text,
-                    "audio_url": audio_url, "confidence": job["whisper_confidence"],
-                    "audio_quality": job["audio_quality"],
-                    "grammar_corrected": job["grammar_modified"],
-                }, meeting_id, recipient_id
-            )
+        print(
+            f"[SUBTITLE-TRANSLATE] meeting_id={meeting_id} speaker_id={job['user_id']} "
+            f"recipient_id={recipient_id} target_language={language!r} "
+            f"translate_called={bool(target_code)} success={result.get('success')} "
+            f"translated_text={result.get('translated_text')!r}"
+        )
+        if not result.get("success"):
             print(
                 f"[translation-routing] chunk_id={chunk_id} speaker_id={job['user_id']} "
-                f"speaker_name={job['user_name']!r} recipient_id={recipient_id} "
-                f"recipient_name={recipient_name!r} preferred_language={language} "
-                f"target_language={language} output_mode={output_mode} "
-                f"elapsed={elapsed:.2f}s delivered={delivered}"
+                f"recipient_id={recipient_id} recipient_name={recipient_name!r} "
+                f"preferred_language={language} target_language={language} "
+                f"recipient_output_mode={recipient_output_mode} elapsed={elapsed:.2f}s "
+                f"delivered=False reason={result.get('reason')}"
+            )
+            return
+        translated_text = (result.get("translated_text") or "").strip()
+        if not translated_text:
+            print(
+                f"[translation-routing] chunk_id={chunk_id} recipient_id={recipient_id} "
+                "delivered=False reason=empty_translation"
+            )
+            return
+        try:
+            save_result = await translations_collection.update_one(
+                {
+                    "meeting_id": meeting_id,
+                    "chunk_id": chunk_id,
+                    "user_id": recipient_id,
+                },
+                {"$set": {
+                    "meeting_id": meeting_id,
+                    "chunk_id": chunk_id,
+                    "user_id": recipient_id,
+                    "recipient_id": recipient_id,
+                    "speaker_id": job["user_id"],
+                    "speaker_name": job["user_name"],
+                    "source_language": job["detected_language"],
+                    "target_language": language,
+                    "source_text": job["transcript"],
+                    "translated_text": translated_text,
+                    "text": translated_text,
+                    "translation_type": "Speech",
+                    "word_count": len(translated_text.split()),
+                    "created_at": datetime.now(timezone.utc),
+                }},
+                upsert=True,
             )
             print(
-                f"[TRANSLATION-TIMING] chunk_id={chunk_id} "
-                f"source={job['detected_language']} target={language} "
-                f"translation_ms={elapsed * 1000:.0f}"
+                f"[conversation-save] type=translation meeting_id={meeting_id} "
+                f"user_id={recipient_id} chunk_id={chunk_id} saved=True "
+                f"matched={save_result.matched_count} upserted={save_result.upserted_id is not None}"
             )
+        except Exception as error:
+            print(
+                f"[conversation-save] type=translation meeting_id={meeting_id} "
+                f"user_id={recipient_id} chunk_id={chunk_id} saved=False "
+                f"error={type(error).__name__}: {error}"
+            )
+        # Translated voice/TTS is never generated: the original speaker's
+        # audio is always preserved and delivered via WebRTC, and translation
+        # applies only to the text/subtitle layer.
+        payload = {
+            "type": "translation", "chunk_id": chunk_id,
+            "user_id": job["user_id"], "speaker_id": job["user_id"],
+            "user_name": job["user_name"], "speaker_name": job["user_name"],
+            "recipient_id": recipient_id, "source_language": job["detected_language"],
+            "target_language": language, "output_mode": "subtitle",
+            "recipient_output_mode": recipient_output_mode,
+            "is_subtitle": True, "text": translated_text,
+            "source_text": job["transcript"], "translated_text": translated_text,
+            "audio_url": None, "confidence": job["whisper_confidence"],
+            "audio_quality": job["audio_quality"],
+            "grammar_corrected": job["grammar_modified"],
+        }
+        delivered = await manager.send_personal_message(
+            payload, meeting_id, recipient_id
+        )
+        print(
+            f"[translation-routing] chunk_id={chunk_id} speaker_id={job['user_id']} "
+            f"speaker_name={job['user_name']!r} recipient_id={recipient_id} "
+            f"recipient_name={recipient_name!r} preferred_language={language} "
+            f"target_language={language} recipient_output_mode={recipient_output_mode} "
+            f"is_subtitle=True delivered={delivered} payload={payload}"
+        )
+        print(
+            f"[TRANSLATION-TIMING] chunk_id={chunk_id} "
+            f"source={job['detected_language']} target={language} "
+            f"translation_ms={elapsed * 1000:.0f}"
+        )
 
     await asyncio.gather(persist_feedback(), *[
-        translate_and_deliver(language, recipients)
-        for language, recipients in recipients_by_language.items()
+        translate_and_deliver(recipient_id, recipient_name, language, output_mode)
+        for recipient_id, recipient_name, language, output_mode in recipients
     ])
 
 

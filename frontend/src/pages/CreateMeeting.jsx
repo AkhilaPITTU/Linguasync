@@ -194,14 +194,17 @@ function CreateMeeting() {
                     >
 
                         <option>English</option>
-                        <option>Hindi</option>
                         <option>Telugu</option>
+                        <option>Hindi</option>
                         <option>Tamil</option>
                         <option>Kannada</option>
                         <option>Malayalam</option>
-                        <option>French</option>
-                        <option>German</option>
-                        <option>Spanish</option>
+                        <option>Bengali</option>
+                        <option>Marathi</option>
+                        <option>Gujarati</option>
+                        <option>Punjabi</option>
+                        <option>Urdu</option>
+                        <option>Odia</option>
 
                     </select>
 

@@ -1,30 +1,37 @@
+import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from IndicTransToolkit.processor import IndicProcessor
 
 
-# One multilingual model is used for every supported source -> target pair.
-NLLB_MODEL_NAME = "facebook/nllb-200-distilled-600M"
+# Direct source -> target translation for every supported pair, without
+# pivoting through English, requires three directional IndicTrans2
+# checkpoints instead of a single one: English -> Indic, Indic -> English,
+# and Indic <-> Indic. Each is loaded once, the first time that direction
+# is actually needed, and then reused for every later request in that
+# direction (never one instance per user and never one per language pair).
+EN_INDIC_MODEL_NAME = "ai4bharat/indictrans2-en-indic-dist-200M"
+INDIC_EN_MODEL_NAME = "ai4bharat/indictrans2-indic-en-dist-200M"
+INDIC_INDIC_MODEL_NAME = "ai4bharat/indictrans2-indic-indic-dist-320M"
 
+ENGLISH_FLORES_CODE = "eng_Latn"
+
+# LinguaSync now targets exactly these 12 languages. Every code below is
+# the FLORES-200 / IndicTrans2 code, verified against IndicTrans2's own
+# published language list (ai4bharat/indictrans2-*) before this change --
+# all 12, including Odia (ory_Orya), are directly supported.
 LANGUAGE_CONFIG = {
-    "English": {"code": "en", "nllb_code": "eng_Latn"},
-    "Telugu": {"code": "te", "nllb_code": "tel_Telu"},
-    "Hindi": {"code": "hi", "nllb_code": "hin_Deva"},
-    "Tamil": {"code": "ta", "nllb_code": "tam_Taml"},
-    "Kannada": {"code": "kn", "nllb_code": "kan_Knda"},
-    "Malayalam": {"code": "ml", "nllb_code": "mal_Mlym"},
-    "Bengali": {"code": "bn", "nllb_code": "ben_Beng"},
-    "Marathi": {"code": "mr", "nllb_code": "mar_Deva"},
-    "Gujarati": {"code": "gu", "nllb_code": "guj_Gujr"},
-    "Punjabi": {"code": "pa", "nllb_code": "pan_Guru"},
-    "Urdu": {"code": "ur", "nllb_code": "urd_Arab"},
-    "Spanish": {"code": "es", "nllb_code": "spa_Latn"},
-    "French": {"code": "fr", "nllb_code": "fra_Latn"},
-    "German": {"code": "de", "nllb_code": "deu_Latn"},
-    "Italian": {"code": "it", "nllb_code": "ita_Latn"},
-    "Portuguese": {"code": "pt", "nllb_code": "por_Latn"},
-    "Russian": {"code": "ru", "nllb_code": "rus_Cyrl"},
-    "Chinese": {"code": "zh", "nllb_code": "zho_Hans"},
-    "Japanese": {"code": "ja", "nllb_code": "jpn_Jpan"},
-    "Korean": {"code": "ko", "nllb_code": "kor_Hang"},
+    "English": {"code": "en", "flores_code": "eng_Latn"},
+    "Telugu": {"code": "te", "flores_code": "tel_Telu"},
+    "Hindi": {"code": "hi", "flores_code": "hin_Deva"},
+    "Tamil": {"code": "ta", "flores_code": "tam_Taml"},
+    "Kannada": {"code": "kn", "flores_code": "kan_Knda"},
+    "Malayalam": {"code": "ml", "flores_code": "mal_Mlym"},
+    "Bengali": {"code": "bn", "flores_code": "ben_Beng"},
+    "Marathi": {"code": "mr", "flores_code": "mar_Deva"},
+    "Gujarati": {"code": "gu", "flores_code": "guj_Gujr"},
+    "Punjabi": {"code": "pa", "flores_code": "pan_Guru"},
+    "Urdu": {"code": "ur", "flores_code": "urd_Arab"},
+    "Odia": {"code": "or", "flores_code": "ory_Orya"},
 }
 
 LANGUAGE_CODES = {
@@ -32,8 +39,12 @@ LANGUAGE_CODES = {
     for language, config in LANGUAGE_CONFIG.items()
 }
 
-NLLB_LANGUAGE_TOKENS = {
-    config["code"]: config["nllb_code"]
+# Every language configured above is now IndicTrans2-supported (the
+# non-Indic languages that previously required this filter have been
+# removed from LANGUAGE_CONFIG entirely), so the token map can be built
+# directly from it without a separate supported-languages filter.
+INDICTRANS2_LANGUAGE_TOKENS = {
+    config["code"]: config["flores_code"]
     for config in LANGUAGE_CONFIG.values()
 }
 
@@ -43,6 +54,8 @@ class TranslationService:
     def __init__(self):
 
         self.models = {}
+
+        self.processor = None
 
         self.language_codes = LANGUAGE_CODES
 
@@ -65,17 +78,39 @@ class TranslationService:
 
         return self.language_codes.get(normalized_language)
 
-    def load_model(self):
+    def _select_model_name(self, source_flores_code, target_flores_code):
 
-        model_name = NLLB_MODEL_NAME
+        # Route to whichever directional checkpoint actually covers this
+        # pair directly -- English is never used as an intermediate step,
+        # it is simply one side of the two English-facing checkpoints.
+        if source_flores_code == ENGLISH_FLORES_CODE:
+            return EN_INDIC_MODEL_NAME
+
+        if target_flores_code == ENGLISH_FLORES_CODE:
+            return INDIC_EN_MODEL_NAME
+
+        return INDIC_INDIC_MODEL_NAME
+
+    def _get_processor(self):
+
+        if self.processor is None:
+            self.processor = IndicProcessor(inference=True)
+
+        return self.processor
+
+    def load_model(self, model_name):
 
         if model_name not in self.models:
 
             print(f"Loading translation model: {model_name}")
 
             try:
-                tokenizer = AutoTokenizer.from_pretrained(model_name)
-                model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+                tokenizer = AutoTokenizer.from_pretrained(
+                    model_name, trust_remote_code=True
+                )
+                model = AutoModelForSeq2SeqLM.from_pretrained(
+                    model_name, trust_remote_code=True
+                )
 
                 self.models[model_name] = {
                     "tokenizer": tokenizer,
@@ -120,8 +155,8 @@ class TranslationService:
             }
 
         if (
-            source_code not in NLLB_LANGUAGE_TOKENS or
-            target_code not in NLLB_LANGUAGE_TOKENS
+            source_code not in INDICTRANS2_LANGUAGE_TOKENS or
+            target_code not in INDICTRANS2_LANGUAGE_TOKENS
         ):
             return {
                 "success": False,
@@ -129,7 +164,12 @@ class TranslationService:
                 "translated_text": None,
             }
 
-        model_data, load_error = self.load_model()
+        source_flores_code = INDICTRANS2_LANGUAGE_TOKENS[source_code]
+        target_flores_code = INDICTRANS2_LANGUAGE_TOKENS[target_code]
+
+        model_name = self._select_model_name(source_flores_code, target_flores_code)
+
+        model_data, load_error = self.load_model(model_name)
 
         if model_data is None:
             return {
@@ -141,27 +181,37 @@ class TranslationService:
 
         try:
             tokenizer = model_data["tokenizer"]
-            tokenizer.src_lang = NLLB_LANGUAGE_TOKENS[source_code]
+            model = model_data["model"]
+            processor = self._get_processor()
+
+            preprocessed = processor.preprocess_batch(
+                [text.strip()],
+                src_lang=source_flores_code,
+                tgt_lang=target_flores_code,
+            )
 
             inputs = tokenizer(
-                text.strip(),
+                preprocessed,
                 return_tensors="pt",
-                padding=True,
+                padding="longest",
                 truncation=True,
             )
 
-            target_token_id = tokenizer.convert_tokens_to_ids(
-                NLLB_LANGUAGE_TOKENS[target_code]
-            )
+            with torch.no_grad():
+                generated = model.generate(
+                    **inputs,
+                    max_length=256,
+                    num_beams=5,
+                )
 
-            translated = model_data["model"].generate(
-                **inputs,
-                forced_bos_token_id=target_token_id,
-            )
-
-            translated_text = tokenizer.batch_decode(
-                translated,
+            decoded = tokenizer.batch_decode(
+                generated,
                 skip_special_tokens=True,
+                clean_up_tokenization_spaces=True,
+            )
+
+            translated_text = processor.postprocess_batch(
+                decoded, lang=target_flores_code
             )[0].strip()
 
             if not translated_text:

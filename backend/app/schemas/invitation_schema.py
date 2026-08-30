@@ -13,4 +13,6 @@ class RespondInvitationSchema(BaseModel):
 
 class AcceptInvitationSchema(BaseModel):
     preferred_language: str
-    output_mode: Literal["none", "subtitle", "voice", "subtitle_voice"]
+    # Translated voice/TTS has been removed entirely: only "none" and
+    # "subtitle" (text-only) are valid recipient output modes.
+    output_mode: Literal["none", "subtitle"]

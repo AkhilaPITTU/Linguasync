@@ -13,6 +13,7 @@ const LANGUAGE_CODES = {
     Gujarati: "gu",
     Punjabi: "pa",
     Urdu: "ur",
+    Odia: "or",
     Chinese: "zh",
     Japanese: "ja",
     Korean: "ko",

@@ -40,7 +40,9 @@ class JoinMeetingSchema(BaseModel):
     # preferred-language fallback.
     source_language: str | None = None
 
-    output_mode: Literal["none", "subtitle", "voice", "subtitle_voice"]
+    # Translated voice/TTS has been removed entirely: only "none" and
+    # "subtitle" (text-only) are valid recipient output modes.
+    output_mode: Literal["none", "subtitle"]
 
 
 # ==========================================

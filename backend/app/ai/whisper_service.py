@@ -10,11 +10,25 @@ class WhisperService:
 
     def __init__(self):
 
-        self.model = WhisperModel(
-            "small",
-            device="cpu",
-            compute_type="int8"
-        )
+        # Lazy-loaded: the ~small/int8 faster-whisper model is only
+        # instantiated the first time a transcription is actually
+        # requested, not when this module (and therefore the app) starts.
+        self._model = None
+
+    def get_model(self):
+        """Return the shared faster-whisper model, loading it on first use."""
+
+        if self._model is None:
+
+            print("Loading Whisper model: small (device=cpu, compute_type=int8)")
+
+            self._model = WhisperModel(
+                "small",
+                device="cpu",
+                compute_type="int8"
+            )
+
+        return self._model
 
     def _logprob_to_confidence(self, avg_logprob: float) -> float:
         """
@@ -72,7 +86,7 @@ class WhisperService:
                     f"[WHISPER-LANGUAGE-TRACE] task=transcribe "
                     f"requested_language={language or None}"
                 )
-                segments, info = self.model.transcribe(
+                segments, info = self.get_model().transcribe(
                     whisper_audio,
                     task="transcribe",
                     beam_size=5,
