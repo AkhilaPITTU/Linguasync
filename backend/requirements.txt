@@ -1,7 +1,5 @@
 # Python 3.11 / Render runtime dependencies for LINGUASYNC.
-# Keep the Hugging Face stack together: IndicTransToolkit 1.1.1 supports
-# Transformers 4.51+, while its collator still imports a symbol removed from
-# Transformers 5.x.
+# M2M100 runs on the pinned Hugging Face Transformers stack below.
 
 # Web application and persistence
 fastapi==0.140.0
@@ -23,13 +21,12 @@ faster-whisper==1.2.1
 ctranslate2==4.8.1
 onnxruntime==1.28.0
 
-# IndicTrans2 / Hugging Face compatibility set
+# M2M100 / Hugging Face compatibility set
 torch==2.5.1
 transformers==4.51.3
 tokenizers==0.21.1
 huggingface-hub==0.30.2
 accelerate==1.14.0
-indictranstoolkit==1.1.1
 sentencepiece==0.2.2
 sacremoses==0.1.1
 
