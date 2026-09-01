@@ -1,5 +1,6 @@
 # Python 3.11 / Render runtime dependencies for LINGUASYNC.
-# M2M100 runs on the pinned Hugging Face Transformers stack below.
+# Translation uses the public LibreTranslate REST API; no local translation
+# model is retained in the Render process.
 
 # Web application and persistence
 fastapi==0.140.0
@@ -21,14 +22,8 @@ faster-whisper==1.2.1
 ctranslate2==4.8.1
 onnxruntime==1.28.0
 
-# M2M100 / Hugging Face compatibility set
-torch==2.5.1
-transformers==4.51.3
-tokenizers==0.21.1
-huggingface-hub==0.30.2
-accelerate==1.14.0
-sentencepiece==0.2.2
-sacremoses==0.1.1
+# Translation API client
+requests==2.34.2
 
 # Existing application features
 edge-tts==7.2.8

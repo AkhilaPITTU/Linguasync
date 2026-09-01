@@ -26,9 +26,8 @@ router = APIRouter()
 meetings_collection = database["meetings"]
 transcripts_collection = database["transcripts"]
 
-# Use the NLLB service's language configuration as the single source of
-# truth. Keeping a separate meeting-socket map allows a display name to drift
-# from the code actually supplied to the translation model.
+# Use the translation service's language configuration as the single source
+# of truth. This keeps stored display names aligned with API language codes.
 LANGUAGE_MAP = LANGUAGE_CODES
 
 # How many audio_stream chunks we'll let queue up per connection
@@ -47,9 +46,8 @@ ASR_DEBUG_DISABLE_VAD = os.getenv(
 ).lower() == "true"
 ASR_DEBUG_SAVE_WAV = os.getenv("ASR_DEBUG_SAVE_WAV", "false").lower() == "true"
 
-# NLLB keeps mutable tokenizer state (`src_lang`). One generation at a time
-# protects that shared model while post-processing remains independent from
-# the high-priority audio workers.
+# Serialize outbound translation calls while post-processing remains
+# independent from the high-priority audio workers.
 translation_model_lock = asyncio.Lock()
 
 
@@ -160,7 +158,7 @@ async def _process_audio_chunk(
         speaker = _get_participant(meeting or {}, user_id)
         # A participant's selected preferred language is the application's
         # explicit source-speech language setting for that speaker. Resolve
-        # it through the existing canonical NLLB mapping and pass that code
+        # it through the existing canonical language mapping and pass that code
         # to Whisper. Recipient preferences remain translation targets later
         # in the post-processing flow.
         stored_preferred_language = speaker.get(
@@ -319,7 +317,9 @@ async def _process_audio_chunk(
             )
             return
 
-        translation_source_language = detected_language.strip()
+        # Translation source is the speaker's saved preference, not automatic
+        # language detection. It is the same explicit source supplied to ASR.
+        translation_source_language = configured_source_language or "en"
 
         if ASR_DEBUG_ONLY:
             print(
@@ -665,8 +665,8 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
         if not target_code:
             result = {"success": False, "reason": "unsupported_recipient_language"}
         else:
-            # The shared NLLB tokenizer changes src_lang, so serialize model
-            # access while allowing audio and WebSocket processing to continue.
+            # Keep API calls serialized while audio and WebSocket processing
+            # continue independently.
             async with translation_model_lock:
                 result = await asyncio.to_thread(
                     translation_service.translate,

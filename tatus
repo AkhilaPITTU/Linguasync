@@ -1,0 +1,163 @@
+warning: in the working copy of 'backend/app/ai/translation_service.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/app/ai/whisper_service.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/app/main.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/app/services/translation_service.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/app/websocket/meeting_socket.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/diagnose_translation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'backend/requirements.txt', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/backend/app/ai/translation_service.py b/backend/app/ai/translation_service.py[m
+[1mindex 5176188d..c77b182a 100644[m
+[1m--- a/backend/app/ai/translation_service.py[m
+[1m+++ b/backend/app/ai/translation_service.py[m
+[36m@@ -1,10 +1,10 @@[m
+[31m-from threading import Lock[m
+[32m+[m[32mimport logging[m
+ [m
+[31m-import torch[m
+[31m-from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer[m
+[32m+[m[32mimport requests[m
+ [m
+ [m
+[31m-MODEL_NAME = "facebook/m2m100_418M"[m
+[32m+[m[32mLIBRETRANSLATE_URL = "https://translate.argosopentech.com/translate"[m
+[32m+[m[32mREQUEST_TIMEOUT_SECONDS = 15[m
+ [m
+ LANGUAGE_CODES = {[m
+     "English": "en",[m
+[36m@@ -21,46 +21,18 @@[m [m_LANGUAGE_ALIASES = {[m
+     "te": "te",[m
+ }[m
+ [m
+[32m+[m[32mlogger = logging.getLogger(__name__)[m
+ [m
+[31m-class TranslationService:[m
+[31m-    """One lazy, shared M2M100 translator for English, Hindi, and Telugu."""[m
+ [m
+[31m-    def __init__(self):[m
+[31m-        self.tokenizer = None[m
+[31m-        self.model = None[m
+[31m-        self._load_lock = Lock()[m
+[31m-        # M2M100Tokenizer.src_lang is mutable, so serialization prevents one[m
+[31m-        # request from changing another request's source language mid-encode.[m
+[31m-        self._translation_lock = Lock()[m
+[32m+[m[32mclass TranslationService:[m
+[32m+[m[32m    """Translate text through LibreTranslate without retaining local ML models."""[m
+ [m
+     def get_language_code(self, language):[m
+[31m-        if not language:[m
+[31m-            return None[m
+[31m-[m
+[31m-        return _LANGUAGE_ALIASES.get(str(language).strip().casefold())[m
+[31m-[m
+[31m-    def load_model(self):[m
+[31m-        """Load exactly one tokenizer/model pair on the first real request."""[m
+[31m-        if self.tokenizer is not None and self.model is not None:[m
+[31m-            return True, None[m
+[31m-[m
+[31m-        with self._load_lock:[m
+[31m-            if self.tokenizer is not None and self.model is not None:[m
+[31m-                return True, None[m
+[31m-[m
+[31m-            try:[m
+[31m-                print(f"Loading translation model: {MODEL_NAME}")[m
+[31m-                tokenizer = M2M100Tokenizer.from_pretrained(MODEL_NAME)[m
+[31m-                model = M2M100ForConditionalGeneration.from_pretrained(MODEL_NAME)[m
+[31m-                model.eval()[m
+[31m-                self.tokenizer = tokenizer[m
+[31m-                self.model = model[m
+[31m-                return True, None[m
+[31m-            except Exception as error:[m
+[31m-                return False, str(error)[m
+[32m+[m[32m        """Resolve a saved language preference; unavailable values use English."""[m
+[32m+[m[32m        return _LANGUAGE_ALIASES.get(str(language or "").strip().casefold(), "en")[m
+ [m
+     def translate(self, text, source_lang="English", target_lang="English"):[m
+[31m-        """Translate directly between supported M2M100 languages."""[m
+[32m+[m[32m        """Keep the existing synchronous translation service contract."""[m
+         if not isinstance(text, str) or not text.strip():[m
+             return {[m
+                 "success": False,[m
+[36m@@ -69,17 +41,10 @@[m [mclass TranslationService:[m
+                 "message": "Text to translate is required.",[m
+             }[m
+ [m
+[32m+[m[32m        cleaned_text = text.strip()[m
+         source_code = self.get_language_code(source_lang)[m
+         target_code = self.get_language_code(target_lang)[m
+[31m-        if not source_code or not target_code:[m
+[31m-            return {[m
+[31m-                "success": False,[m
+[31m-                "translated_text": None,[m
+[31m-                "reason": "unsupported_language_code",[m
+[31m-                "message": "Only English (en), Hindi (hi), and Telugu (te) are supported.",[m
+[31m-            }[m
+ [m
+[31m-        cleaned_text = text.strip()[m
+         if source_code == target_code:[m
+             return {[m
+                 "success": True,[m
+[36m@@ -87,51 +52,40 @@[m [mclass TranslationService:[m
+                 "reason": None,[m
+             }[m
+ [m
+[31m-        loaded, load_error = self.load_model()[m
+[31m-        if not loaded:[m
+[31m-            return {[m
+[31m-                "success": False,[m
+[31m-                "translated_text": None,[m
+[31m-                "reason": "model_unavailable",[m
+[31m-                "message": load_error,[m
+[31m-            }[m
+[31m-[m
+         try:[m
+[31m-            with self._translation_lock:[m
+[31m-                self.tokenizer.src_lang = source_code[m
+[31m-                encoded = self.tokenizer([m
+[31m-                    cleaned_text,[m
+[31m-                    return_tensors="pt",[m
+[31m-                    truncation=True,[m
+[31m-                )[m
+[31m-                with torch.no_grad():[m
+[31m-                    generated = self.model.generate([m
+[31m-                        **encoded,[m
+[31m-                        forced_bos_token_id=self.tokenizer.get_lang_id(target_code),[m
+[31m-                    )[m
+[31m-                translated_text = self.tokenizer.batch_decode([m
+[31m-                    generated,[m
+[31m-                    skip_special_tokens=True,[m
+[31m-                )[0].strip()[m
+[31m-[m
+[31m-            if not translated_text:[m
+[31m-                return {[m
+[31m-                    "success": False,[m
+[31m-                    "translated_text": None,[m
+[31m-                    "reason": "empty_translation",[m
+[31m-                    "message": "The translation model returned no text.",[m
+[31m-                }[m
+[32m+[m[32m            response = requests.post([m
+[32m+[m[32m                LIBRETRANSLATE_URL,[m
+[32m+[m[32m                json={[m
+[32m+[m[32m                    "q": cleaned_text,[m
+[32m+[m[32m                    "source": source_code,[m
+[32m+[m[32m                    "target": target_code,[m
+[32m+[m[32m                    "format": "text",[m
+[32m+[m[32m                },[m
+[32m+[m[32m                timeout=REQUEST_TIMEOUT_SECONDS,[m
+[32m+[m[32m            )[m
+[32m+[m[32m            response.raise_for_status()[m
+[32m+[m[32m            translated_text = response.json().get("translatedText")[m
+[32m+[m[32m            if not isinstance(translated_text, str) or not translated_text.strip():[m
+[32m+[m[32m                raise ValueError("LibreTranslate response did not contain translatedText")[m
+ [m
+             return {[m
+                 "success": True,[m
+[31m-                "translated_text": translated_text,[m
+[32m+[m[32m                "translated_text": translated_text.strip(),[m
+                 "reason": None,[m
+             }[m
+[31m-        except Exception as error:[m
+[32m+[m[32m        except (requests.RequestException, ValueError, TypeError) as error:[m
+[32m+[m[32m            # Translation must never interrupt a live meeting. Return source[m
+[32m+[m[32m            # text as a usable subtitle when the public service is unavailable.[m
+[32m+[m[32m            logger.warning([m
+[32m+[m[32m                "LibreTranslate fal

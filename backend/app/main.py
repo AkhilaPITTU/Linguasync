@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config.database import client
 from app.config.settings import settings
+from app.ai.whisper_service import whisper_service
 
 # ==========================================
 # ROUTERS
@@ -59,6 +61,15 @@ from app.websocket.meeting_socket import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    # Initialize one tiny/int8 Whisper singleton before accepting requests.
+    # If model download is unavailable, non-ASR features remain available and
+    # transcribe() continues to return its established error response.
+    try:
+        await asyncio.to_thread(whisper_service.get_model)
+        print("Whisper model ready")
+    except Exception as error:
+        print(f"Whisper model initialization failed: {type(error).__name__}: {error}")
 
     print("=" * 60)
     print("🚀 LINGUASYNC Backend Started")

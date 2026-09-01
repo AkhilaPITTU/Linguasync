@@ -1,5 +1,7 @@
+import gc
 import os
 import tempfile
+from threading import Lock
 
 import numpy as np
 
@@ -10,23 +12,23 @@ class WhisperService:
 
     def __init__(self):
 
-        # Lazy-loaded: the ~small/int8 faster-whisper model is only
-        # instantiated the first time a transcription is actually
-        # requested, not when this module (and therefore the app) starts.
+        # This singleton is initialized during FastAPI startup and reused by
+        # every transcription. It is never released during a meeting.
         self._model = None
+        self._model_lock = Lock()
 
     def get_model(self):
         """Return the shared faster-whisper model, loading it on first use."""
 
         if self._model is None:
-
-            print("Loading Whisper model: small (device=cpu, compute_type=int8)")
-
-            self._model = WhisperModel(
-                "small",
-                device="cpu",
-                compute_type="int8"
-            )
+            with self._model_lock:
+                if self._model is None:
+                    print("Loading Whisper model: tiny (device=cpu, compute_type=int8)")
+                    self._model = WhisperModel(
+                        "tiny",
+                        device="cpu",
+                        compute_type="int8"
+                    )
 
         return self._model
 
@@ -194,6 +196,14 @@ class WhisperService:
             if temp_path and os.path.exists(temp_path):
 
                 os.remove(temp_path)
+
+            # Release per-request audio/decoding objects. The global Whisper
+            # singleton is deliberately retained for later requests.
+            try:
+                del whisper_audio
+            except UnboundLocalError:
+                pass
+            gc.collect()
 
 
 whisper_service = WhisperService()
