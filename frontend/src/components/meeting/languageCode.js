@@ -1,0 +1,26 @@
+const LANGUAGE_CODES = {
+    English: "en",
+    Spanish: "es",
+    French: "fr",
+    German: "de",
+    Hindi: "hi",
+    Telugu: "te",
+    Tamil: "ta",
+    Kannada: "kn",
+    Malayalam: "ml",
+    Bengali: "bn",
+    Marathi: "mr",
+    Gujarati: "gu",
+    Punjabi: "pa",
+    Urdu: "ur",
+    Odia: "or",
+    Chinese: "zh",
+    Japanese: "ja",
+    Korean: "ko",
+    Arabic: "ar",
+    Italian: "it",
+    Portuguese: "pt",
+    Russian: "ru",
+};
+
+export const getLanguageCode = (language) => LANGUAGE_CODES[language] || language || "en";

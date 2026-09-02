@@ -13,6 +13,11 @@ import ResetPassword from "../pages/ResetPassword";
 import CreateMeeting from "../pages/CreateMeeting";
 import MeetingRoom from "../pages/MeetingRoom";
 import AddParticipants from "../pages/AddParticipants";
+import RecentCallsPage from "../pages/RecentCallsPage";
+import TranslationHistoryPage from "../pages/TranslationHistoryPage";
+import ExportedChatsPage from "../pages/ExportedChatsPage";
+import ProfileOverviewPage from "../pages/ProfileOverviewPage";
+import IncomingInvitationPopup from "../components/invitations/IncomingInvitationPopup";
 
 
 // ==========================================
@@ -26,7 +31,7 @@ function ProtectedRoute({ children }) {
     );
 
     return token
-        ? children
+        ? <><IncomingInvitationPopup />{children}</>
         : <Navigate to="/login" replace />;
 
 }
@@ -82,6 +87,42 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <CreateMeeting />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/call-history"
+                element={
+                    <ProtectedRoute>
+                        <RecentCallsPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/translation-history"
+                element={
+                    <ProtectedRoute>
+                        <TranslationHistoryPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/exports"
+                element={
+                    <ProtectedRoute>
+                        <ExportedChatsPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/profile"
+                element={
+                    <ProtectedRoute>
+                        <ProfileOverviewPage />
                     </ProtectedRoute>
                 }
             />

@@ -289,18 +289,14 @@ async def pending_invitations_service(
         # Find pending invitations for current user
         # -------------------------------------------------
 
-        cursor = invitations_collection.find(
-            {
-                "invited_user_id":
-                    user_id,
-
-                "status":
-                    "pending"
-            }
-        )
+        normalized_user_id = str(user_id)
+        cursor = invitations_collection.find({"status": "pending"})
 
 
         async for invite in cursor:
+
+            if str(invite.get("invited_user_id", "")) != normalized_user_id:
+                continue
 
             host = None
 
@@ -464,7 +460,10 @@ async def pending_invitations_service(
 # =========================================================
 
 async def accept_invitation_service(
-    invitation_id: str
+    invitation_id: str,
+    preferred_language: str,
+    output_mode: str,
+    current_user_id: str,
 ):
 
     print(
@@ -524,6 +523,21 @@ async def accept_invitation_service(
                 "message":
                     "Invitation not found."
 
+            }
+
+        invited_user_id = str(invite.get("invited_user_id", ""))
+        normalized_current_user_id = str(current_user_id)
+
+        print("current_user_id=", normalized_current_user_id)
+        print("invitation_id=", invitation_id)
+        print("invited_user_id=", invited_user_id)
+        print("invitation_status=", invite.get("status"))
+        print("meeting_id=", invite.get("meeting_id"))
+
+        if invited_user_id != normalized_current_user_id:
+            return {
+                "success": False,
+                "message": "Invitation does not belong to the current user."
             }
 
 
@@ -616,11 +630,6 @@ async def accept_invitation_service(
         # Get invited user's ID
         # -------------------------------------------------
 
-        invited_user_id = invite.get(
-            "invited_user_id"
-        )
-
-
         if not invited_user_id:
 
             return {
@@ -699,7 +708,13 @@ async def accept_invitation_service(
                 user_name,
 
             "language":
-                "English",
+                preferred_language,
+
+            "preferred_language":
+                preferred_language,
+
+            "output_mode":
+                output_mode,
 
             "mic_enabled":
                 True,
@@ -720,33 +735,24 @@ async def accept_invitation_service(
         # Add participant only if not already present
         # -------------------------------------------------
 
-        result = await meetings_collection.update_one(
-
-            {
-                "meeting_id":
-                    meeting_id,
-
-                "participants.user_id":
-                    {
-                        "$ne":
-                            invited_user_id
-                    }
-            },
-
-            {
-                "$push":
-                    {
-                        "participants":
-                            participant
-                    }
-            }
-
+        already_participant = any(
+            str(existing.get("user_id", "")) == normalized_current_user_id
+            for existing in meeting.get("participants", [])
         )
+
+        if already_participant:
+            result_modified_count = 0
+        else:
+            result = await meetings_collection.update_one(
+                {"meeting_id": meeting_id},
+                {"$push": {"participants": participant}},
+            )
+            result_modified_count = result.modified_count
 
 
         print(
             "Participant Added:",
-            result.modified_count
+            result_modified_count
         )
 
 
@@ -773,7 +779,18 @@ async def accept_invitation_service(
 
 
         print(
-            "Invitation Accepted"
+            "========== INVITATION ACCEPTED =========="
+        )
+
+        updated_meeting = await meetings_collection.find_one(
+            {"meeting_id": meeting_id}, {"participants": 1}
+        )
+        print(
+            "participants=",
+            [
+                str(item.get("user_id"))
+                for item in (updated_meeting or {}).get("participants", [])
+            ]
         )
 
         print(

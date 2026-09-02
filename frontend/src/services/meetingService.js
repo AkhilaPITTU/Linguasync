@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const API = axios.create({
-  baseURL: "http://127.0.0.1:8000",
+  baseURL: API_BASE_URL,
 });
 
 // Helper to retrieve auth header
@@ -86,9 +87,10 @@ export const leaveMeeting = async (meetingId, userId) => {
 // ===========================
 // End Meeting
 // ===========================
-export const endMeeting = async (meetingId) => {
+export const endMeeting = async (meetingId, hostId = getCleanUserId()) => {
+  const cleanHostId = hostId?.split(":")[0];
   const response = await API.put(
-    `/api/meeting/end/${meetingId}`,
+    `/api/meeting/end/${meetingId}?host_id=${encodeURIComponent(cleanHostId || "")}`,
     {},
     { headers: getAuthHeaders() }
   );
@@ -99,8 +101,19 @@ export const endMeeting = async (meetingId) => {
 // ===========================
 // Join Meeting
 // ===========================
-export const joinMeeting = async (meetingId, userName, language) => {
+export const joinMeeting = async (
+  meetingId,
+  userName,
+  preferredLanguage,
+  outputMode,
+  sourceLanguage = null
+) => {
   const userId = getCleanUserId();
+
+  console.log("[LANGUAGE-PIPELINE] stage=join_request", {
+    preferredLanguage,
+    sourceLanguage,
+  });
 
   // Passing user_id in BOTH query params and body to handle backend expectations safely
   const response = await API.post(
@@ -109,7 +122,9 @@ export const joinMeeting = async (meetingId, userName, language) => {
       user_id: userId,
       meeting_id: meetingId,
       user_name: userName,
-      language: language,
+      preferred_language: preferredLanguage,
+      source_language: sourceLanguage,
+      output_mode: outputMode,
     },
     { headers: getAuthHeaders() }
   );

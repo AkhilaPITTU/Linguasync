@@ -2,7 +2,7 @@ import "./ProfileOverview.css";
 
 import { useEffect, useState } from "react";
 
-import { getProfile } from "../../services/profileService";
+import { getProfile, updateProfile } from "../../services/profileService";
 
 import {
     FiGlobe,
@@ -32,6 +32,10 @@ function ProfileOverview() {
         audio_calls: 0
 
     });
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState("");
+    const [error, setError] = useState("");
 
     useEffect(() => {
 
@@ -56,6 +60,34 @@ function ProfileOverview() {
         fetchProfile();
 
     }, []);
+
+    const saveProfile = async (event) => {
+        event.preventDefault();
+        setSaving(true);
+        setMessage("");
+        setError("");
+
+        try {
+            const response = await updateProfile({
+                full_name: profile.full_name,
+                preferred_language: profile.preferred_language,
+                output_mode: profile.output_mode,
+            });
+
+            if (!response?.success) {
+                throw new Error(response?.message || "Unable to update profile.");
+            }
+
+            setProfile(response.data);
+            localStorage.setItem("user_name", response.data.full_name);
+            setMessage("Profile updated successfully.");
+            setEditing(false);
+        } catch (saveError) {
+            setError(saveError.response?.data?.detail || saveError.message || "Unable to update profile.");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
 
@@ -87,6 +119,46 @@ function ProfileOverview() {
             {/* Information */}
 
             <div className="profile-info">
+
+                {editing && (
+                    <form className="profile-edit-form" onSubmit={saveProfile}>
+                        <label>
+                            Name
+                            <input
+                                value={profile.full_name || ""}
+                                onChange={(event) => setProfile((current) => ({ ...current, full_name: event.target.value }))}
+                                required
+                            />
+                        </label>
+                        <label>
+                            Email
+                            <input value={profile.email || ""} disabled />
+                        </label>
+                        <label>
+                            Preferred language
+                            <select
+                                value={profile.preferred_language || "English"}
+                                onChange={(event) => setProfile((current) => ({ ...current, preferred_language: event.target.value }))}
+                            >
+                                {["English", "Telugu", "Hindi", "Tamil", "Kannada", "Malayalam", "Bengali", "Marathi", "Gujarati", "Punjabi"].map((language) => (
+                                    <option key={language} value={language}>{language}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label>
+                            Translation output
+                            <select
+                                value={profile.output_mode || "none"}
+                                onChange={(event) => setProfile((current) => ({ ...current, output_mode: event.target.value }))}
+                            >
+                                <option value="none">No translation</option>
+                                <option value="subtitle">Translated subtitles</option>
+                            </select>
+                        </label>
+                        <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>
+                        <button type="button" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+                    </form>
+                )}
 
                 <div>
 
@@ -164,7 +236,11 @@ function ProfileOverview() {
 
             <div className="profile-buttons">
 
-                <button>
+                <button type="button" onClick={() => {
+                    setEditing(true);
+                    setMessage("");
+                    setError("");
+                }}>
 
                     <FiEdit2 />
 
@@ -173,6 +249,9 @@ function ProfileOverview() {
                 </button>
 
             </div>
+
+            {message && <p className="profile-feedback success">{message}</p>}
+            {error && <p className="profile-feedback error">{error}</p>}
 
         </div>
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createMeeting } from "../services/meetingService";
+import { showToast } from "../components/notification/toastService";
 import "./CreateMeeting.css";
 
 function CreateMeeting() {
@@ -44,7 +45,7 @@ function CreateMeeting() {
                 !response.meeting
             ) {
 
-                alert("Unable to create meeting.");
+                showToast("Unable to create meeting.", "error");
                 return;
 
             }
@@ -53,7 +54,21 @@ function CreateMeeting() {
 
             localStorage.setItem("meeting_id", meetingId);
 
-            navigate(`/meeting/${meetingId}`);
+            const outputModePreferences = {
+                original: "none",
+                text: "subtitle",
+            };
+
+            navigate(`/meeting/${meetingId}`, {
+                state: {
+                    joinPreferences: {
+                        preferred_language: language,
+                        output_mode:
+                            outputModePreferences[outputMode] ||
+                            "none",
+                    },
+                },
+            });
 
         } catch (error) {
 
@@ -61,14 +76,15 @@ function CreateMeeting() {
 
             if (error.response) {
 
-                alert(
+                showToast(
                     error.response.data.detail ||
-                    "Unable to create meeting."
+                    "Unable to create meeting.",
+                    "error",
                 );
 
             } else {
 
-                alert("Server is not responding.");
+                showToast("Server is not responding.", "error");
 
             }
 
@@ -125,7 +141,7 @@ function CreateMeeting() {
                         <p>
 
                             Voice communication with optional
-                            translated speech.
+                            translated subtitles.
 
                         </p>
 
@@ -178,14 +194,17 @@ function CreateMeeting() {
                     >
 
                         <option>English</option>
-                        <option>Hindi</option>
                         <option>Telugu</option>
+                        <option>Hindi</option>
                         <option>Tamil</option>
                         <option>Kannada</option>
                         <option>Malayalam</option>
-                        <option>French</option>
-                        <option>German</option>
-                        <option>Spanish</option>
+                        <option>Bengali</option>
+                        <option>Marathi</option>
+                        <option>Gujarati</option>
+                        <option>Punjabi</option>
+                        <option>Urdu</option>
+                        <option>Odia</option>
 
                     </select>
 
@@ -230,26 +249,21 @@ function CreateMeeting() {
 
                                 <div
                                     className={
-                                        outputMode === "translated_speech"
+                                        outputMode === "text"
                                             ? "mode-card active"
                                             : "mode-card"
                                     }
                                     onClick={() =>
-                                        setOutputMode("translated_speech")
+                                        setOutputMode("text")
                                     }
                                 >
-                                    <div className="mode-icon">🔊</div>
+                                    <div className="mode-icon">📝</div>
 
                                     <div>
 
-                                        <h4>Translated Speech</h4>
+                                        <h4>Translated Subtitles</h4>
 
-                                        <p>
-
-                                            Hear translated audio
-                                            in your language
-
-                                        </p>
+                                        <p>Show translated subtitles</p>
 
                                     </div>
 
@@ -342,71 +356,6 @@ function CreateMeeting() {
 
                                 </div>
 
-                                <div
-                                    className={
-                                        outputMode === "speech"
-                                            ? "mode-card active"
-                                            : "mode-card"
-                                    }
-                                    onClick={() =>
-                                        setOutputMode("speech")
-                                    }
-                                >
-                                    <div className="mode-icon">
-                                        🔊
-                                    </div>
-
-                                    <div>
-
-                                        <h4>
-
-                                            Translated Speech
-
-                                        </h4>
-
-                                        <p>
-
-                                            Hear translated voice
-
-                                        </p>
-
-                                    </div>
-
-                                </div>
-
-                                <div
-                                    className={
-                                        outputMode === "text_speech"
-                                            ? "mode-card active"
-                                            : "mode-card"
-                                    }
-                                    onClick={() =>
-                                        setOutputMode("text_speech")
-                                    }
-                                >
-                                    <div className="mode-icon">
-                                        ✨
-                                    </div>
-
-                                    <div>
-
-                                        <h4>
-
-                                            Text + Speech
-
-                                        </h4>
-
-                                        <p>
-
-                                            Subtitle +
-                                            translated voice
-
-                                        </p>
-
-                                    </div>
-
-                                </div>
-
                             </div>
 
                         </div>
@@ -434,4 +383,3 @@ function CreateMeeting() {
 }
 
 export default CreateMeeting;
-                            

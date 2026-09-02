@@ -17,4 +17,5 @@ meetings_collection = database["meetings"]
 transcripts_collection = database["transcripts"]
 
 translations_collection = database["translations"]
+chat_messages_collection = database["chat_messages"]
 invitations_collection = database["invitations"]
