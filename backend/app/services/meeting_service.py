@@ -115,6 +115,11 @@ async def join_meeting(
     print("\n========== JOIN MEETING ==========")
     print("Meeting ID:", meeting_id)
     print("User ID:", user_id)
+    print(
+        "[LANGUAGE-PIPELINE] stage=join_request "
+        f"user_id={user_id} preferred_language={preferred_language!r} "
+        f"source_language={source_language!r} output_mode={output_mode!r}"
+    )
 
     meeting = await meetings_collection.find_one(
         {
@@ -160,6 +165,12 @@ async def join_meeting(
         "screen_share": False,
         "speaking": False
     }
+
+    print(
+        "[LANGUAGE-PIPELINE] stage=mongodb_participant_write "
+        f"user_id={user_id} preferred_language={participant['preferred_language']!r} "
+        f"source_language={participant['source_language']!r}"
+    )
 
     if not exists:
 

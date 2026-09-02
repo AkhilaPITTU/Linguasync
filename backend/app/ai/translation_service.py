@@ -10,15 +10,48 @@ LANGUAGE_CODES = {
     "English": "en",
     "Hindi": "hi",
     "Telugu": "te",
+    "Tamil": "ta",
+    "Kannada": "kn",
+    "Malayalam": "ml",
+    "Bengali": "bn",
+    "Marathi": "mr",
+    "Gujarati": "gu",
+    "Punjabi": "pa",
+    "Urdu": "ur",
+    "Odia": "or",
+    "French": "fr",
 }
 
 _LANGUAGE_ALIASES = {
     "english": "en",
     "en": "en",
     "hindi": "hi",
+    "hindi (india)": "hi",
     "hi": "hi",
     "telugu": "te",
+    "telugu (india)": "te",
     "te": "te",
+    "tamil": "ta",
+    "tamil (india)": "ta",
+    "ta": "ta",
+    "kannada": "kn",
+    "kn": "kn",
+    "malayalam": "ml",
+    "ml": "ml",
+    "bengali": "bn",
+    "bn": "bn",
+    "marathi": "mr",
+    "mr": "mr",
+    "gujarati": "gu",
+    "gu": "gu",
+    "punjabi": "pa",
+    "pa": "pa",
+    "urdu": "ur",
+    "ur": "ur",
+    "odia": "or",
+    "or": "or",
+    "french": "fr",
+    "fr": "fr",
 }
 
 logger = logging.getLogger(__name__)
@@ -27,9 +60,19 @@ logger = logging.getLogger(__name__)
 class TranslationService:
     """Translate text through LibreTranslate without retaining local ML models."""
 
-    def get_language_code(self, language):
-        """Resolve a saved language preference; unavailable values use English."""
-        return _LANGUAGE_ALIASES.get(str(language or "").strip().casefold(), "en")
+    def get_language_code(self, language, default="en"):
+        """Resolve display names and BCP-47 tags without forcing English."""
+        normalized = str(language or "").strip().casefold()
+        if not normalized:
+            return default
+
+        # Clients and legacy MongoDB records can use BCP-47 values such as
+        # ``hi-IN``. Whisper and LibreTranslate require the base ISO code.
+        base_code = normalized.replace("_", "-").split("-", 1)[0]
+        return _LANGUAGE_ALIASES.get(
+            normalized,
+            _LANGUAGE_ALIASES.get(base_code, default),
+        )
 
     def translate(self, text, source_lang="English", target_lang="English"):
         """Keep the existing synchronous translation service contract."""

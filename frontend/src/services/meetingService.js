@@ -110,6 +110,11 @@ export const joinMeeting = async (
 ) => {
   const userId = getCleanUserId();
 
+  console.log("[LANGUAGE-PIPELINE] stage=join_request", {
+    preferredLanguage,
+    sourceLanguage,
+  });
+
   // Passing user_id in BOTH query params and body to handle backend expectations safely
   const response = await API.post(
     `/api/meeting/join?user_id=${userId}`,

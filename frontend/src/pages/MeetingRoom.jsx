@@ -320,7 +320,8 @@ const MeetingRoom = () => {
                 setLanguage(participantLanguage);
 
                 console.log("[ASR-LANGUAGE-TRACE]", {
-                    selectedLanguage: participantLanguage,
+                    stage: "frontend_selected_language",
+                    preferredLanguage: participantLanguage,
                     sourceLanguage: participantSourceLanguage,
                 });
 
@@ -1232,6 +1233,7 @@ const MeetingRoom = () => {
                                     number:
                                         sentAudioChunkCountRef.current,
                                     bytes: audioChunk.byteLength,
+                                    preferredLanguage: participantLanguage,
                                     sourceLanguage: participantSourceLanguage,
                                 });
                             }
