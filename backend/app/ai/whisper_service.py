@@ -44,7 +44,22 @@ class WhisperService:
 
         return round(confidence, 2)
 
-    def transcribe(self, audio, vad_filter=True, language=None):
+    def transcribe(self, audio, vad_filter=True, language: str = ""):
+
+        # Live meeting callers must supply the participant's selected
+        # language. Refuse a missing value rather than enabling Whisper's
+        # automatic language detection.
+        if not isinstance(language, str) or not language.strip():
+            return {
+                "success": False,
+                "reason": "missing_configured_language",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
+
+        language = language.strip()
 
         if audio is None or (hasattr(audio, "size") and audio.size == 0) or (
             isinstance(audio, (bytes, bytearray)) and not audio
@@ -86,16 +101,16 @@ class WhisperService:
             try:
                 print(
                     f"[WHISPER-LANGUAGE-TRACE] task=transcribe "
-                    f"requested_language={language or None}"
+                    f"fixed_language={language}"
                 )
-                segments, info = self.get_model().transcribe(
+                segments, _info = self.get_model().transcribe(
                     whisper_audio,
                     task="transcribe",
                     beam_size=5,
                     temperature=0.0,
                     vad_filter=vad_filter,
                     condition_on_previous_text=False,
-                    language=language or None,
+                    language=language,
                 )
                 # Faster-Whisper returns a lazy generator. Materialize it
                 # once before extracting text and diagnostics.
@@ -165,23 +180,15 @@ class WhisperService:
 
             )
 
-            detected_language = getattr(info, "language", None)
-            detected_probability = getattr(info, "language_probability", None)
             print(
-                f"[WHISPER-LANGUAGE-TRACE] requested_language={language or None} "
-                f"detected_language={detected_language} "
-                f"language_probability={detected_probability}"
+                f"[WHISPER-LANGUAGE-TRACE] fixed_language={language}"
             )
 
             return {
 
                 "success": True,
 
-                "language": detected_language,
-
-                "language_probability": getattr(
-                    info, "language_probability", None
-                ),
+                "language": language,
 
                 "text": transcript.strip(),
 

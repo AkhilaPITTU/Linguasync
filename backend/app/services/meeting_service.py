@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
 from bson import ObjectId
@@ -7,6 +8,7 @@ from app.config.database import database, users_collection
 from app.models.Meeting import Meeting
 
 meetings_collection = database["meetings"]
+logger = logging.getLogger(__name__)
 
 LANGUAGE_CODES = {
     "English": "en", "Telugu": "te", "Hindi": "hi", "Tamil": "ta",
@@ -120,6 +122,12 @@ async def join_meeting(
         f"user_id={user_id} preferred_language={preferred_language!r} "
         f"source_language={source_language!r} output_mode={output_mode!r}"
     )
+    logger.info(
+        "Join request -> user_id=%s preferred_language=%s source_language=%s",
+        user_id,
+        preferred_language,
+        source_language,
+    )
 
     meeting = await meetings_collection.find_one(
         {
@@ -152,13 +160,19 @@ async def join_meeting(
         for participant in meeting["participants"]
     )
 
+    # The browser supplies the ISO code for the one language selected before
+    # joining. Retain it rather than replacing it with a default value.
+    resolved_source_language = _source_language_code(
+        source_language or preferred_language
+    )
+
     participant = {
         "user_id": user_id,
         "user_name": user_name,
         # Keep language for existing UI and older meeting records.
         "language": preferred_language,
         "preferred_language": preferred_language,
-        "source_language": _source_language_code(preferred_language),
+        "source_language": resolved_source_language,
         "output_mode": output_mode,
         "mic_enabled": True,
         "camera_enabled": True,
@@ -197,7 +211,7 @@ async def join_meeting(
                 "$set": {
                     "participants.$.language": preferred_language,
                     "participants.$.preferred_language": preferred_language,
-                    "participants.$.source_language": _source_language_code(preferred_language),
+                    "participants.$.source_language": resolved_source_language,
                     "participants.$.output_mode": output_mode,
                 }
             }
@@ -205,6 +219,21 @@ async def join_meeting(
 
     updated_meeting = await meetings_collection.find_one(
         {"meeting_id": meeting_id}
+    )
+
+    saved_participant = next(
+        (
+            item for item in updated_meeting.get("participants", [])
+            if str(item.get("user_id", "")) == normalized_user_id
+        ),
+        {},
+    )
+    logger.info(
+        "MongoDB participant after save -> user_id=%s preferred_language=%s "
+        "source_language=%s",
+        user_id,
+        saved_participant.get("preferred_language"),
+        saved_participant.get("source_language"),
     )
 
     print("Participants After Join:")

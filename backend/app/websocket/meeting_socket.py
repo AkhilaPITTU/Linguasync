@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from datetime import datetime, timezone
 from time import perf_counter
@@ -22,6 +23,7 @@ from app.services.human_review_service import human_review_service
 from app.services.ai_feedback_service import ai_feedback_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 meetings_collection = database["meetings"]
 transcripts_collection = database["transcripts"]
@@ -169,11 +171,37 @@ async def _process_audio_chunk(
         received_source_language = translation_service.get_language_code(
             websocket_source_language, default=None
         )
-        configured_source_language = translation_service.get_language_code(
-            stored_preferred_language, default=None
-        ) or translation_service.get_language_code(
+        logger.info(
+            "Incoming audio_stream -> meeting_id=%s user_id=%s "
+            "received_source_language=%s",
+            meeting_id,
+            user_id,
+            received_source_language,
+        )
+        configured_source_language = received_source_language or translation_service.get_language_code(
             stored_source_language, default=None
-        ) or received_source_language
+        ) or translation_service.get_language_code(
+            stored_preferred_language, default=None
+        )
+
+        logger.info(
+            "Language Debug -> stored_preferred=%s, stored_source=%s, "
+            "received_source=%s, configured=%s",
+            stored_preferred_language,
+            stored_source_language,
+            received_source_language,
+            configured_source_language,
+        )
+
+        if not configured_source_language:
+            logger.error(
+                "Rejected transcription because source language was missing. "
+                "meeting_id=%s user_id=%s chunk_id=%s",
+                meeting_id,
+                user_id,
+                chunk_id,
+            )
+            return
 
         print(
             f"[LANGUAGE-PIPELINE] stage=mongodb_lookup chunk_id={chunk_id} "
@@ -261,6 +289,9 @@ async def _process_audio_chunk(
             "task=transcribe beam_size=5 temperature=0.0 "
             f"vad_filter={vad_filter} condition_on_previous_text=False"
         )
+        logger.info(
+            "Calling Whisper with fixed language=%s", configured_source_language
+        )
         transcript_result = await asyncio.to_thread(
             whisper_service.transcribe,
             pcm_samples,
@@ -277,27 +308,19 @@ async def _process_audio_chunk(
             return
 
         transcript = transcript_result.get("text", "")
-        detected_language = transcript_result.get("language")
         whisper_confidence = transcript_result.get("confidence", 0)
 
         print(
             f"[LANGUAGE-PIPELINE] stage=whisper_result chunk_id={chunk_id} "
-            f"speaker_id={user_id} detected_language={detected_language!r} language_probability="
-            f"{transcript_result.get('language_probability')} "
+            f"speaker_id={user_id} configured_language={configured_source_language!r} "
             f"segment_count={len(transcript_result.get('segments', []))} "
             f"duration={transcription_seconds:.2f}s raw_text={transcript!r}"
         )
         print(
             f"[STT] speaker_id={user_id} configured_source_language="
-            f"{configured_source_language} detected_language={detected_language} "
-            f"language_probability={transcript_result.get('language_probability')} "
+            f"{configured_source_language} "
             f"transcript={transcript!r}"
         )
-        if configured_source_language and detected_language and configured_source_language != detected_language:
-            print(
-                f"[STT] language_hint_mismatch speaker_id={user_id} "
-                f"configured={configured_source_language} detected={detected_language}"
-            )
         for segment in transcript_result.get("segments", []):
             print(
                 f"[WHISPER-SEGMENT] chunk_id={chunk_id} start={segment.get('start')} "
@@ -315,20 +338,9 @@ async def _process_audio_chunk(
             print(f"[audio:{chunk_id}] Whisper returned empty text.")
             return
 
-        if (
-            not configured_source_language
-            and (not isinstance(detected_language, str) or not detected_language.strip())
-        ):
-            print(
-                f"[audio:{chunk_id}] Whisper returned no detected language; "
-                "transcript and translation skipped."
-            )
-            return
-
-        # A persisted speaker preference is the source for both ASR and
-        # translation. When no preference exists, use Whisper's detected
-        # language rather than guessing English.
-        translation_source_language = configured_source_language or detected_language
+        # The live meeting flow never uses Whisper's detected language as a
+        # fallback. The speaker-selected language is required before ASR.
+        translation_source_language = configured_source_language
 
         if ASR_DEBUG_ONLY:
             print(
@@ -425,7 +437,6 @@ async def _process_audio_chunk(
             # diagnostic language result. Translation must use this source.
             "source_language": translation_source_language,
             "speaker_preferred_language": stored_preferred_language,
-            "whisper_detected_language": detected_language,
             "whisper_confidence": whisper_confidence, "audio_quality": audio_quality,
             "grammar_result": grammar_result, "grammar_modified": grammar_modified,
         }
@@ -621,7 +632,6 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
         f"[SUBTITLE-RUNTIME] pid={os.getpid()} meeting_id={meeting_id} "
         f"speaker_id={job['user_id']} speaker_preferred_language="
         f"{job.get('speaker_preferred_language')!r} source_language={job['source_language']!r} "
-        f"whisper_detected_language={job.get('whisper_detected_language')!r} "
         f"transcript={job['transcript']!r} connected_ids={sorted(connected_ids)}"
     )
     recipients = []
@@ -695,11 +705,16 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
             # Keep API calls serialized while audio and WebSocket processing
             # continue independently.
             async with translation_model_lock:
+                logger.info(
+                    "Translation Debug -> source_lang=%s, target_lang=%s",
+                    job["source_language"],
+                    language,
+                )
                 result = await asyncio.to_thread(
                     translation_service.translate,
                     job["transcript"],
                     source_lang=job["source_language"],
-                    target_lang=target_code,
+                    target_lang=language,
                 )
         elapsed = perf_counter() - started
         print(
@@ -1229,6 +1244,17 @@ async def meeting_socket(
                     continue
 
                 original_text = record.get("text", "")
+                corrected_source_language = (
+                    record.get("source_language") or record.get("language")
+                )
+                if not corrected_source_language:
+                    logger.error(
+                        "Correction translation rejected because source language was "
+                        "missing: meeting_id=%s chunk_id=%s",
+                        meeting_id,
+                        chunk_id,
+                    )
+                    continue
                 await transcripts_collection.update_one(
                     {"_id": record["_id"]},
                     {"$set": {
@@ -1242,7 +1268,7 @@ async def meeting_socket(
                     "user_id": speaker_id, "speaker_id": speaker_id,
                     "user_name": record.get("speaker_name", user_name),
                     "speaker_name": record.get("speaker_name", user_name),
-                    "language": record.get("language", "en"),
+                    "language": corrected_source_language,
                     "original_text": original_text, "corrected_text": corrected_text,
                     "text": corrected_text, "is_corrected": True,
                     "corrected_by": user_id,
@@ -1257,11 +1283,8 @@ async def meeting_socket(
                     "chunk_id": chunk_id, "user_id": speaker_id,
                     "user_name": record.get("speaker_name", user_name),
                     "transcript": corrected_text,
-                    "source_language": record.get(
-                        "source_language", record.get("language", "en")
-                    ),
+                    "source_language": corrected_source_language,
                     "speaker_preferred_language": record.get("language"),
-                    "whisper_detected_language": None,
                     "whisper_confidence": 0, "audio_quality": 0,
                     "grammar_result": {"original_text": record.get("original_text", original_text)},
                     "grammar_modified": True,

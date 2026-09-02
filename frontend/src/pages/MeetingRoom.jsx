@@ -83,12 +83,8 @@ const MeetingRoom = () => {
 
     const [translations, setTranslations] = useState([]);
 
-    const defaultLanguage =
-        joinPreferences?.preferred_language ||
-        "English";
-
     const [language, setLanguage] =
-        useState(defaultLanguage);
+        useState(joinPreferences?.preferred_language || "");
 
     const [outputMode, setOutputMode] =
         useState(
@@ -275,8 +271,14 @@ const MeetingRoom = () => {
                 const participantLanguage =
                     joinPreferences?.preferred_language ||
                     savedParticipant?.preferred_language ||
-                    savedParticipant?.language ||
-                    defaultLanguage;
+                    savedParticipant?.language;
+
+                if (!participantLanguage) {
+                    const message = "Select your speaking language before joining the meeting.";
+                    console.error(message);
+                    setMediaError(message);
+                    return;
+                }
 
                 const participantOutputMode =
                     joinPreferences?.output_mode ||
