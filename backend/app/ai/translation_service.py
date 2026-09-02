@@ -6,6 +6,7 @@ import requests
 LIBRETRANSLATE_URL = "https://translate.argosopentech.com/translate"
 REQUEST_TIMEOUT_SECONDS = 15
 
+
 LANGUAGE_CODES = {
     "English": "en",
     "Hindi": "hi",
