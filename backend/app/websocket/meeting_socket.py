@@ -193,6 +193,15 @@ async def _process_audio_chunk(
             configured_source_language,
         )
 
+        # TEMP DEBUG LOGGING (requested for language debugging; remove when done)
+        print(
+            f"[DEBUG-AUDIO-STREAM-LANGUAGE] participant_id={user_id} "
+            f"websocket_source_language={websocket_source_language!r} "
+            f"stored_source_language={stored_source_language!r} "
+            f"stored_preferred_language={stored_preferred_language!r} "
+            f"configured_source_language={configured_source_language!r}"
+        )
+
         if not configured_source_language:
             logger.error(
                 "Rejected transcription because source language was missing. "
@@ -292,6 +301,8 @@ async def _process_audio_chunk(
         logger.info(
             "Calling Whisper with fixed language=%s", configured_source_language
         )
+        # TEMP DEBUG LOGGING (requested for language debugging; remove when done)
+        print(f"[DEBUG-WHISPER-CALL] language={configured_source_language}")
         transcript_result = await asyncio.to_thread(
             whisper_service.transcribe,
             pcm_samples,
@@ -309,6 +320,12 @@ async def _process_audio_chunk(
 
         transcript = transcript_result.get("text", "")
         whisper_confidence = transcript_result.get("confidence", 0)
+
+        # TEMP DEBUG LOGGING (requested for language debugging; remove when done)
+        print(
+            f"[DEBUG-WHISPER-RESULT] transcript={transcript!r} "
+            f"language_used={configured_source_language!r}"
+        )
 
         print(
             f"[LANGUAGE-PIPELINE] stage=whisper_result chunk_id={chunk_id} "
@@ -897,6 +914,13 @@ async def meeting_socket(
         "preferred_language", participant.get("language", "English")
     )
     output_mode = _normalize_output_mode(participant.get("output_mode", "none"))
+
+    # TEMP DEBUG LOGGING (requested for language debugging; remove when done)
+    print(
+        f"[DEBUG-JOIN-LANGUAGE] user_id={user_id} "
+        f"preferred_language={preferred_language!r} "
+        f"source_language={participant.get('source_language')!r}"
+    )
 
     print("\n========== WEBSOCKET JOIN ==========")
     print("Meeting:", meeting_id)

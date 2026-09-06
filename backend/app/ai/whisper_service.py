@@ -25,9 +25,21 @@ class WhisperService:
                 if self._model is None:
                     print("Loading Whisper model: tiny (device=cpu, compute_type=int8)")
                     self._model = WhisperModel(
-                        "tiny",
+                        "small",
                         device="cpu",
                         compute_type="int8"
+                    )
+                    # TEMP DEBUG LOGGING (requested for runtime language
+                    # investigation; remove when done)
+                    try:
+                        _is_multilingual = self._model.model.is_multilingual
+                    except Exception as _debug_error:
+                        _is_multilingual = f"<unavailable: {_debug_error}>"
+                    print(
+                        "[DEBUG-MODEL-LOADED] requested_model_size='tiny' "
+                        f"is_multilingual={_is_multilingual!r} "
+                        f"model_repr={self._model!r} "
+                        f"ctranslate2_model_repr={getattr(self._model, 'model', None)!r}"
                     )
 
         return self._model
@@ -103,7 +115,16 @@ class WhisperService:
                     f"[WHISPER-LANGUAGE-TRACE] task=transcribe "
                     f"fixed_language={language}"
                 )
-                segments, _info = self.get_model().transcribe(
+                # TEMP DEBUG LOGGING (requested for runtime language
+                # investigation; remove when done)
+                print(
+                    "[DEBUG-TRANSCRIBE-CALL] "
+                    f"configured_source_language={language!r} "
+                    f"language_argument={language!r} "
+                    "beam_size=5 task='transcribe' "
+                    f"vad_filter={vad_filter!r}"
+                )
+                segments, info = self.get_model().transcribe(
                     whisper_audio,
                     task="transcribe",
                     beam_size=5,
@@ -111,6 +132,14 @@ class WhisperService:
                     vad_filter=vad_filter,
                     condition_on_previous_text=False,
                     language=language,
+                )
+                # TEMP DEBUG LOGGING (requested for runtime language
+                # investigation; remove when done)
+                print(
+                    "[DEBUG-WHISPER-INFO] "
+                    f"info.language={getattr(info, 'language', None)!r} "
+                    "info.language_probability="
+                    f"{getattr(info, 'language_probability', None)!r}"
                 )
                 # Faster-Whisper returns a lazy generator. Materialize it
                 # once before extracting text and diagnostics.

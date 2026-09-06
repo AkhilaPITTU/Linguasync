@@ -1,4 +1,4 @@
-"""Read-only diagnostic for the LibreTranslate-backed translation service.
+"""Read-only diagnostic for the MyMemory-backed translation service.
 
 Run from the backend directory:
     venv\\Scripts\\python.exe diagnose_translation.py
