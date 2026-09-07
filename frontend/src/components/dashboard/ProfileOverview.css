@@ -173,3 +173,12 @@ PROFILE OVERVIEW
     transform:translateY(-3px);
 
 }
+
+.profile-edit-form{ display:grid; gap:12px; margin-bottom:16px; }
+.profile-edit-form label{ display:grid; gap:6px; color:#cbd5e1; font-size:14px; }
+.profile-edit-form input,.profile-edit-form select{ border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:10px; background:#0f172a; color:#fff; }
+.profile-edit-form button{ border:0; border-radius:10px; padding:10px; color:#fff; background:#6c4dff; cursor:pointer; }
+.profile-edit-form button[type="button"]{ background:#293244; }
+.profile-feedback{ margin:14px 0 0; font-size:14px; }
+.profile-feedback.success{ color:#86efac; }
+.profile-feedback.error{ color:#fca5a5; }

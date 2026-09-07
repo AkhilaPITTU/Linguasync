@@ -33,7 +33,16 @@ class JoinMeetingSchema(BaseModel):
 
     user_name: str
 
-    language: str
+    preferred_language: str
+
+    # Spoken/source language is deliberately independent from the recipient
+    # subtitle language. Older clients may omit it and retain the existing
+    # preferred-language fallback.
+    source_language: str | None = None
+
+    # Translated voice/TTS has been removed entirely: only "none" and
+    # "subtitle" (text-only) are valid recipient output modes.
+    output_mode: Literal["none", "subtitle"]
 
 
 # ==========================================
@@ -58,6 +67,12 @@ class ParticipantSchema(BaseModel):
     user_name: str
 
     language: str
+
+    preferred_language: str = "English"
+
+    source_language: str = "English"
+
+    output_mode: str = "none"
 
     mic_enabled: bool = True
 

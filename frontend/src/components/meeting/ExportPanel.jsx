@@ -54,7 +54,6 @@ const ExportPanel = ({
                 exportedAt: new Date().toISOString(),
             }
         );
-
     };
 
     const exportMeetingLog = () => {

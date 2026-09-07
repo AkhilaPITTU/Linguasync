@@ -1,43 +1,68 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import "./LanguageSettings.css";
+import { getLanguageCode } from "./languageCode";
+import { showToast } from "../notification/toastService";
 
+// Matches backend/app/ai/translation_service.py's LANGUAGE_CONFIG exactly --
+// these are the only languages the translation engine can actually
+// translate. Offering any language not in that list here silently breaks
+// recipient-specific subtitle translation for that participant.
 const languages = [
     "English",
-    "Spanish",
-    "French",
-    "German",
-    "Hindi",
     "Telugu",
+    "Hindi",
     "Tamil",
-    "Chinese",
-    "Japanese",
-    "Korean",
-    "Arabic",
+    "Kannada",
+    "Malayalam",
+    "Bengali",
+    "Marathi",
+    "Gujarati",
+    "Punjabi",
     "Urdu",
+    "Odia",
 ];
 
 const LanguageSettings = ({
     language = "English",
+    outputMode = "none",
     setLanguage = () => {},
+    onPreferencesSave = async () => {},
 }) => {
 
-    const [spokenLanguage, setSpokenLanguage] = useState(language);
-    const [translationLanguage, setTranslationLanguage] = useState("Spanish");
-    const [voiceLanguage, setVoiceLanguage] = useState("Spanish");
+    const [preferredLanguage, setPreferredLanguage] = useState(language);
+    const [selectedOutputMode, setSelectedOutputMode] = useState(
+        outputMode === "subtitle" ? "subtitle" : "none"
+    );
+    const [isSaving, setIsSaving] = useState(false);
 
-    useEffect(() => {
-        setSpokenLanguage(language);
-    }, [language]);
+    const handleSave = async () => {
 
-    const handleSave = () => {
+        setIsSaving(true);
 
-        setLanguage(spokenLanguage);
+        try {
 
-        localStorage.setItem("spoken_language", spokenLanguage);
-        localStorage.setItem("translation_language", translationLanguage);
-        localStorage.setItem("voice_language", voiceLanguage);
+            await onPreferencesSave({
+                preferred_language: preferredLanguage,
+                source_language: getLanguageCode(preferredLanguage),
+                output_mode: selectedOutputMode,
+            });
 
-        alert("Language settings saved successfully.");
+            setLanguage(preferredLanguage);
+            localStorage.setItem("spoken_language", getLanguageCode(preferredLanguage));
+            localStorage.setItem("translation_output_mode", selectedOutputMode);
+
+            showToast("Meeting language preferences saved successfully.");
+
+        } catch (error) {
+
+            console.error("Unable to save meeting language preferences:", error);
+            showToast("Unable to save meeting language preferences. Please try again.", "error");
+
+        } finally {
+
+            setIsSaving(false);
+
+        }
 
     };
 
@@ -49,11 +74,11 @@ const LanguageSettings = ({
 
             <div className="setting-card">
 
-                <label>Spoken Language</label>
+                <label>Preferred subtitle language</label>
 
                 <select
-                    value={spokenLanguage}
-                    onChange={(e) => setSpokenLanguage(e.target.value)}
+                    value={preferredLanguage}
+                    onChange={(e) => setPreferredLanguage(e.target.value)}
                 >
 
                     {languages.map((lang) => (
@@ -68,37 +93,15 @@ const LanguageSettings = ({
 
             <div className="setting-card">
 
-                <label>Translate To</label>
+                <label>Translation Output</label>
 
                 <select
-                    value={translationLanguage}
-                    onChange={(e) => setTranslationLanguage(e.target.value)}
+                    value={selectedOutputMode}
+                    onChange={(e) => setSelectedOutputMode(e.target.value)}
                 >
 
-                    {languages.map((lang) => (
-                        <option key={lang} value={lang}>
-                            {lang}
-                        </option>
-                    ))}
-
-                </select>
-
-            </div>
-
-            <div className="setting-card">
-
-                <label>Voice Output</label>
-
-                <select
-                    value={voiceLanguage}
-                    onChange={(e) => setVoiceLanguage(e.target.value)}
-                >
-
-                    {languages.map((lang) => (
-                        <option key={lang} value={lang}>
-                            {lang}
-                        </option>
-                    ))}
+                    <option value="none">No translation</option>
+                    <option value="subtitle">Translated subtitles</option>
 
                 </select>
 
@@ -107,8 +110,9 @@ const LanguageSettings = ({
             <button
                 className="save-language-btn"
                 onClick={handleSave}
+                disabled={isSaving}
             >
-                Save Settings
+                {isSaving ? "Saving..." : "Save Meeting Preferences"}
             </button>
 
         </div>

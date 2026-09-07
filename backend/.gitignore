@@ -1,3 +1,26 @@
 backend/venv/
 .env
 backend/.env
+# Virtual environments
+venv/
+venv311/
+backend/venv/
+backend/venv311/
+
+# Environment files
+.env
+backend/.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+backend/test_motor.py

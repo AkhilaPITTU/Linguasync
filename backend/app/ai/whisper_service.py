@@ -1,5 +1,9 @@
+import gc
 import os
 import tempfile
+from threading import Lock
+
+import numpy as np
 
 from faster_whisper import WhisperModel
 
@@ -8,11 +12,37 @@ class WhisperService:
 
     def __init__(self):
 
-        self.model = WhisperModel(
-            "small",
-            device="cpu",
-            compute_type="int8"
-        )
+        # This singleton is initialized during FastAPI startup and reused by
+        # every transcription. It is never released during a meeting.
+        self._model = None
+        self._model_lock = Lock()
+
+    def get_model(self):
+        """Return the shared faster-whisper model, loading it on first use."""
+
+        if self._model is None:
+            with self._model_lock:
+                if self._model is None:
+                    print("Loading Whisper model: tiny (device=cpu, compute_type=int8)")
+                    self._model = WhisperModel(
+                        "small",
+                        device="cpu",
+                        compute_type="int8"
+                    )
+                    # TEMP DEBUG LOGGING (requested for runtime language
+                    # investigation; remove when done)
+                    try:
+                        _is_multilingual = self._model.model.is_multilingual
+                    except Exception as _debug_error:
+                        _is_multilingual = f"<unavailable: {_debug_error}>"
+                    print(
+                        "[DEBUG-MODEL-LOADED] requested_model_size='tiny' "
+                        f"is_multilingual={_is_multilingual!r} "
+                        f"model_repr={self._model!r} "
+                        f"ctranslate2_model_repr={getattr(self._model, 'model', None)!r}"
+                    )
+
+        return self._model
 
     def _logprob_to_confidence(self, avg_logprob: float) -> float:
         """
@@ -26,24 +56,103 @@ class WhisperService:
 
         return round(confidence, 2)
 
-    def transcribe(self, audio_bytes):
+    def transcribe(self, audio, vad_filter=True, language: str = ""):
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".webm"
-        ) as temp_audio:
+        # Live meeting callers must supply the participant's selected
+        # language. Refuse a missing value rather than enabling Whisper's
+        # automatic language detection.
+        if not isinstance(language, str) or not language.strip():
+            return {
+                "success": False,
+                "reason": "missing_configured_language",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
 
-            temp_audio.write(audio_bytes)
+        language = language.strip()
 
-            temp_path = temp_audio.name
+        if audio is None or (hasattr(audio, "size") and audio.size == 0) or (
+            isinstance(audio, (bytes, bytearray)) and not audio
+        ):
+            return {
+                "success": False,
+                "reason": "empty_audio",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
+
+        temp_path = None
+
+        # The meeting pipeline supplies validated mono float32 PCM at 16 kHz.
+        # Retain WebM-file support for other existing callers.
+        if isinstance(audio, (bytes, bytearray)):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
+                temp_audio.write(audio)
+                temp_path = temp_audio.name
+            whisper_audio = temp_path
+        else:
+            # Faster-Whisper expects one-dimensional, normalized float audio
+            # when a NumPy array is supplied. The meeting decoder already
+            # provides 16 kHz mono PCM; this verifies that boundary without
+            # changing its amplitude.
+            whisper_audio = np.ascontiguousarray(
+                np.nan_to_num(
+                    np.asarray(audio, dtype=np.float32),
+                    nan=0.0,
+                    posinf=0.0,
+                    neginf=0.0,
+                ).reshape(-1)
+            )
 
         try:
 
-            segments, info = self.model.transcribe(
-                temp_path,
-                beam_size=5,
-                vad_filter=True
-            )
+            try:
+                print(
+                    f"[WHISPER-LANGUAGE-TRACE] task=transcribe "
+                    f"fixed_language={language}"
+                )
+                # TEMP DEBUG LOGGING (requested for runtime language
+                # investigation; remove when done)
+                print(
+                    "[DEBUG-TRANSCRIBE-CALL] "
+                    f"configured_source_language={language!r} "
+                    f"language_argument={language!r} "
+                    "beam_size=5 task='transcribe' "
+                    f"vad_filter={vad_filter!r}"
+                )
+                segments, info = self.get_model().transcribe(
+                    whisper_audio,
+                    task="transcribe",
+                    beam_size=5,
+                    temperature=0.0,
+                    vad_filter=vad_filter,
+                    condition_on_previous_text=False,
+                    language=language,
+                )
+                # TEMP DEBUG LOGGING (requested for runtime language
+                # investigation; remove when done)
+                print(
+                    "[DEBUG-WHISPER-INFO] "
+                    f"info.language={getattr(info, 'language', None)!r} "
+                    "info.language_probability="
+                    f"{getattr(info, 'language_probability', None)!r}"
+                )
+                # Faster-Whisper returns a lazy generator. Materialize it
+                # once before extracting text and diagnostics.
+                segments = list(segments)
+            except Exception as error:
+                return {
+                    "success": False,
+                    "reason": f"whisper_error: {error}",
+                    "language": None,
+                    "text": "",
+                    "confidence": 0,
+                    "segments": [],
+                }
 
             transcript = ""
 
@@ -75,7 +184,10 @@ class WhisperService:
 
                     "text": segment.text,
 
-                    "confidence": confidence
+                    "confidence": confidence,
+                    "avg_logprob": avg_logprob,
+                    "no_speech_prob": getattr(segment, "no_speech_prob", None),
+                    "compression_ratio": getattr(segment, "compression_ratio", None),
 
                 })
 
@@ -97,9 +209,15 @@ class WhisperService:
 
             )
 
+            print(
+                f"[WHISPER-LANGUAGE-TRACE] fixed_language={language}"
+            )
+
             return {
 
-                "language": info.language,
+                "success": True,
+
+                "language": language,
 
                 "text": transcript.strip(),
 
@@ -111,9 +229,17 @@ class WhisperService:
 
         finally:
 
-            if os.path.exists(temp_path):
+            if temp_path and os.path.exists(temp_path):
 
                 os.remove(temp_path)
+
+            # Release per-request audio/decoding objects. The global Whisper
+            # singleton is deliberately retained for later requests.
+            try:
+                del whisper_audio
+            except UnboundLocalError:
+                pass
+            gc.collect()
 
 
 whisper_service = WhisperService()

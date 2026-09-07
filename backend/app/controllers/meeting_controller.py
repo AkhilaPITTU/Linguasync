@@ -72,7 +72,9 @@ async def join_meeting_controller(
             meeting_id=data.meeting_id,
             user_id=user_id,
             user_name=data.user_name,
-            language=data.language
+            preferred_language=data.preferred_language,
+            source_language=data.source_language,
+            output_mode=data.output_mode,
         )
 
         if not result["success"]:

@@ -99,6 +99,7 @@ cursor:pointer;
 font-size:15px;
 font-weight:600;
 transition:.3s;
+text-decoration:none;
 }
 
 .primary-btn:hover{
@@ -106,6 +107,9 @@ transform:translateY(-3px);
 }
 
 .secondary-btn{
+display:flex;
+align-items:center;
+justify-content:center;
 padding:13px 24px;
 border-radius:50px;
 background:rgba(255,255,255,.07);
@@ -114,6 +118,7 @@ color:white;
 cursor:pointer;
 transition:.3s;
 font-size:15px;
+text-decoration:none;
 }
 
 .secondary-btn:hover{

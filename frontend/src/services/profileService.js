@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000"
+    baseURL: API_BASE_URL
 });
 
 export const getProfile = async () => {
@@ -28,4 +29,13 @@ export const getProfile = async () => {
 
     return response.data.data;
 
+};
+
+export const updateProfile = async (profile) => {
+    const token = localStorage.getItem("access_token");
+    const response = await API.put("/profile/", profile, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+
+    return response.data;
 };

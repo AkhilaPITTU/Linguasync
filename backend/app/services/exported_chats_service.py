@@ -1,14 +1,15 @@
-from app.config.database import transcripts_collection
+from app.config.database import chat_messages_collection
 
 
 async def exported_chats_service(user_id: str):
 
     documents = (
-        await transcripts_collection
+        await chat_messages_collection
         .find(
-            {
-                "user_id": user_id
-            }
+            {"$or": [
+                {"sender_id": user_id},
+                {"recipient_ids": user_id},
+            ]}
         )
         .sort("created_at", -1)
         .limit(5)
@@ -25,14 +26,11 @@ async def exported_chats_service(user_id: str):
 
             "id": str(document.get("_id")),
 
-            "filename": document.get(
-                "file_name",
-                "Transcript"
-            ),
+            "filename": f"Meeting chat {document.get('meeting_id', '-')}",
 
             "format": document.get(
                 "file_format",
-                "PDF"
+                "Chat message"
             ),
 
             "size": document.get(

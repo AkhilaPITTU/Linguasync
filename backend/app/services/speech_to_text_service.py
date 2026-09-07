@@ -1,22 +1,17 @@
-from faster_whisper import WhisperModel
+from app.ai.whisper_service import whisper_service
 
 
 # ==========================================
-# LOAD WHISPER MODEL (Loaded once)
+# WHISPER MODEL (shared, lazy-loaded)
 # ==========================================
-
-model = WhisperModel(
-    "small",
-    device="cpu",          # Change to "cuda" if GPU is available
-    compute_type="int8"
-)
+# This service used to create its own separate faster-whisper "small"/int8
+# instance at import time, identical to the one in app/ai/whisper_service.py.
+# Both eager loads happening during app startup were a direct contributor to
+# the Render out-of-memory crash. They now share the single lazy-loaded
+# instance owned by whisper_service, loaded on first actual use.
 
 
 class SpeechToTextService:
-
-    def __init__(self):
-
-        self.model = model
 
     # ==========================================
     # SPEECH TO TEXT
@@ -29,7 +24,9 @@ class SpeechToTextService:
 
         try:
 
-            segments, info = self.model.transcribe(
+            model = whisper_service.get_model()
+
+            segments, info = model.transcribe(
 
                 audio_path,
 

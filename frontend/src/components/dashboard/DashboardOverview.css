@@ -1,0 +1,20 @@
+.dashboard-overview { display: grid; gap: 28px; }
+.dashboard-start-card { align-items: center; background: linear-gradient(135deg, #312e81, #0e7490); border: 1px solid rgba(103, 232, 249, 0.24); border-radius: 22px; display: flex; gap: 28px; justify-content: space-between; overflow: hidden; padding: 32px; position: relative; }
+.dashboard-start-card::after { background: rgba(255, 255, 255, 0.08); border-radius: 50%; content: ""; height: 220px; position: absolute; right: -95px; top: -120px; width: 220px; }
+.dashboard-start-card > * { position: relative; z-index: 1; }
+.overview-kicker { color: #a5f3fc; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; margin-bottom: 10px; }
+.dashboard-start-card h2, .overview-section-heading h2 { color: #f8fafc; font-size: 25px; margin: 0; }
+.dashboard-start-card p:not(.overview-kicker) { color: #dbeafe; line-height: 1.6; margin-top: 10px; max-width: 550px; }
+.start-call-link { align-items: center; background: #f8fafc; border-radius: 12px; color: #1e1b4b; display: inline-flex; flex: 0 0 auto; font-weight: 750; gap: 9px; padding: 13px 17px; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s; }
+.start-call-link:hover { box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); transform: translateY(-2px); }
+.overview-section-heading { display: flex; justify-content: space-between; }
+.overview-section-heading .overview-kicker { margin-bottom: 7px; }
+.dashboard-overview-grid { display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.overview-card { background: #111c2f; border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 18px; padding: 24px; transition: border-color 0.2s, transform 0.2s; }
+.overview-card:hover { border-color: rgba(103, 232, 249, 0.42); transform: translateY(-2px); }
+.overview-card-icon { color: #67e8f9; font-size: 22px; margin-bottom: 22px; }
+.overview-card h3 { color: #f8fafc; font-size: 17px; margin: 0; }
+.overview-card p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 10px 0 18px; }
+.overview-card a { align-items: center; color: #a5f3fc; display: inline-flex; font-size: 14px; font-weight: 650; gap: 6px; text-decoration: none; }
+.overview-card a:hover { color: #cffafe; text-decoration: underline; }
+@media (max-width: 720px) { .dashboard-start-card { align-items: flex-start; flex-direction: column; padding: 26px; } .dashboard-overview-grid { grid-template-columns: 1fr; } }

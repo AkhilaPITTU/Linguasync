@@ -115,6 +115,16 @@
     overflow:hidden;
 }
 
+.meeting-media-error{
+    margin:10px 16px 0;
+    padding:12px 14px;
+    border:1px solid rgba(248,113,113,.65);
+    border-radius:10px;
+    background:rgba(127,29,29,.45);
+    color:#fecaca;
+    font-size:14px;
+}
+
 /* ---------------- Left ---------------- */
 
 .meeting-left{

@@ -1,18 +1,61 @@
 import websocketService from "./websocketService";
+import {
+    getDisplayMediaSafely,
+    getUserMediaSafely,
+} from "./mediaDeviceService";
+
+// Builds the RTCPeerConnection ICE server list: the existing public
+// STUN server plus, when configured, a TURN/TURNS relay for networks
+// where a direct peer-to-peer path isn't reachable (mobile data,
+// symmetric NAT, restrictive firewalls). Credentials are always read
+// from environment variables, never hardcoded.
+const buildIceServers = () => {
+
+    const iceServers = [
+        {
+            urls: "stun:stun.l.google.com:19302",
+        },
+    ];
+
+    const turnUrls = (import.meta.env.VITE_TURN_URLS || "")
+        .split(",")
+        .map((url) => url.trim())
+        .filter(Boolean);
+
+    if (turnUrls.length > 0) {
+
+        const turnServer = {
+            urls: turnUrls,
+        };
+
+        const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+        const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+        if (turnUsername) {
+            turnServer.username = turnUsername;
+        }
+
+        if (turnCredential) {
+            turnServer.credential = turnCredential;
+        }
+
+        iceServers.push(turnServer);
+    }
+
+    return iceServers;
+};
 
 class WebRTCService {
 
     constructor() {
 
         this.peerConnections = {};
+        this.pendingIceCandidates = {};
         this.localStream = null;
+        this.microphoneMuted = false;
 
         this.configuration = {
-            iceServers: [
-                {
-                    urls: "stun:stun.l.google.com:19302",
-                }
-            ],
+            iceServers: buildIceServers(),
         };
     }
 
@@ -29,7 +72,7 @@ class WebRTCService {
         try {
 
             this.localStream =
-                await navigator.mediaDevices.getUserMedia({
+                await getUserMediaSafely({
                     video,
                     audio
                 });
@@ -40,11 +83,19 @@ class WebRTCService {
 
             this.localStream.getAudioTracks().forEach(track => {
                 console.log("MIC TRACK:", {
+                    id: track.id,
+                    kind: track.kind,
                     enabled: track.enabled,
                     muted: track.muted,
-                    readyState: track.readyState
+                    readyState: track.readyState,
+                    streamActive: this.localStream.active,
+                    settings: track.getSettings(),
                 });
             });
+
+            this.microphoneMuted = !this.localStream.getAudioTracks().some(
+                (track) => track.readyState === "live" && track.enabled
+            );
 
             if (this.localStream.getAudioTracks().length === 0) {
                 console.warn("⚠️ No audio track captured from getUserMedia(). Mic permission or hardware issue.");
@@ -53,7 +104,7 @@ class WebRTCService {
             return this.localStream;
 
         } catch (error) {
-            console.error("Camera/Microphone Error:", error);
+            console.error("Camera/Microphone Error:", error.message || error);
             throw error;
         }
     }
@@ -69,7 +120,11 @@ class WebRTCService {
     ) {
 
         if (this.peerConnections[targetUserId]) {
-            console.log("PeerConnection already exists:", targetUserId);
+            console.log("[WEBRTC-MESH]", {
+                local: "current-browser",
+                remote: targetUserId,
+                action: "reuse-peer",
+            });
             return this.peerConnections[targetUserId];
         }
 
@@ -77,7 +132,11 @@ class WebRTCService {
 
         this.peerConnections[targetUserId] = pc;
 
-        console.log("PeerConnection Created:", targetUserId);
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "create-peer",
+        });
 
         // ========================================
         // ADD LOCAL AUDIO + VIDEO
@@ -150,6 +209,8 @@ class WebRTCService {
 
             if (!event.candidate) return;
 
+            console.log("ICE candidate sent to:", targetUserId);
+
             websocketService.send({
                 type: "ice_candidate",
                 target: targetUserId,
@@ -165,7 +226,11 @@ class WebRTCService {
 
         pc.onconnectionstatechange = () => {
 
-            console.log("Peer:", targetUserId, "Connection:", pc.connectionState);
+            console.log("[WEBRTC-MESH]", {
+                local: "current-browser",
+                remote: targetUserId,
+                state: pc.connectionState,
+            });
 
             if (
                 pc.connectionState === "failed" ||
@@ -217,7 +282,11 @@ class WebRTCService {
 
     async createOffer(targetUserId) {
 
-        console.log("createOffer() called for:", targetUserId);
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "create-offer",
+        });
 
         const pc = this.peerConnections[targetUserId];
 
@@ -247,7 +316,11 @@ class WebRTCService {
 
     async createAnswer(targetUserId, offer) {
 
-        console.log("createAnswer() called for:", targetUserId);
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "create-answer",
+        });
         console.log("Incoming OFFER SDP has audio:", offer?.sdp?.includes("m=audio"));
 
         const pc = this.peerConnections[targetUserId];
@@ -258,6 +331,7 @@ class WebRTCService {
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await this.flushPendingIceCandidates(targetUserId);
 
         const answer = await pc.createAnswer();
 
@@ -285,9 +359,13 @@ class WebRTCService {
 
         const pc = this.peerConnections[targetUserId];
 
-        if (!pc) return;
+        if (!pc) {
+            console.warn("Answer received for unknown peer:", targetUserId);
+            return;
+        }
 
         await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        await this.flushPendingIceCandidates(targetUserId);
 
     }
 
@@ -302,12 +380,38 @@ class WebRTCService {
 
         const pc = this.peerConnections[targetUserId];
 
-        if (!pc) return;
+        if (!pc || !pc.remoteDescription) {
+            console.log("ICE candidate queued for:", targetUserId);
+            this.pendingIceCandidates[targetUserId] ||= [];
+            this.pendingIceCandidates[targetUserId].push(candidate);
+            return;
+        }
 
         try {
             await pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (error) {
             console.error("ICE Error:", error);
+        }
+    }
+
+    async flushPendingIceCandidates(targetUserId) {
+
+        const candidates = this.pendingIceCandidates[targetUserId] || [];
+
+        if (!candidates.length) return;
+
+        const pc = this.peerConnections[targetUserId];
+
+        if (!pc || !pc.remoteDescription) return;
+
+        delete this.pendingIceCandidates[targetUserId];
+
+        for (const candidate of candidates) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.error("Queued ICE Error:", error);
+            }
         }
     }
 
@@ -319,8 +423,14 @@ class WebRTCService {
     closePeerConnection(targetUserId) {
         const pc = this.peerConnections[targetUserId];
         if (!pc) return;
+        console.log("[WEBRTC-MESH]", {
+            local: "current-browser",
+            remote: targetUserId,
+            action: "close",
+        });
         pc.close();
         delete this.peerConnections[targetUserId];
+        delete this.pendingIceCandidates[targetUserId];
     }
 
     closeAllConnections() {
@@ -335,6 +445,7 @@ class WebRTCService {
             this.localStream.getTracks().forEach(track => track.stop());
             this.localStream = null;
         }
+        this.microphoneMuted = false;
     }
 
     getPeerConnection(targetUserId) {
@@ -350,18 +461,51 @@ class WebRTCService {
             this.peerConnections[targetUserId].close();
             delete this.peerConnections[targetUserId];
         }
+        delete this.pendingIceCandidates[targetUserId];
     }
 
     getLocalStream() {
         return this.localStream;
     }
 
-    toggleMicrophone(enabled) {
-        if (!this.localStream) return;
-        this.localStream.getAudioTracks().forEach(track => {
-            track.enabled = enabled;
-            console.log("Microphone:", enabled);
+    setMicrophoneMuted(muted) {
+        const liveAudioTracks = (this.localStream?.getAudioTracks() || []).filter(
+            (track) => track.readyState === "live"
+        );
+
+        if (!liveAudioTracks.length) {
+            console.warn("Cannot change microphone state: no live local audio track.");
+            return {
+                changed: false,
+                muted: this.microphoneMuted,
+            };
+        }
+
+        liveAudioTracks.forEach((track) => {
+            track.enabled = !muted;
         });
+
+        // The track is the source of truth. Keep the cached value only as a
+        // convenient synchronous read for callers that need to update UI.
+        this.microphoneMuted = !liveAudioTracks.some((track) => track.enabled);
+
+        console.log(`[MIC-DEBUG] ${this.microphoneMuted ? "mute" : "unmute"}`, {
+            streamActive: this.localStream?.active ?? false,
+            audioTracks: liveAudioTracks.map((track) => ({
+                enabled: track.enabled,
+                readyState: track.readyState,
+                muted: track.muted,
+            })),
+        });
+
+        return {
+            changed: true,
+            muted: this.microphoneMuted,
+        };
+    }
+
+    toggleMicrophone(enabled) {
+        return this.setMicrophoneMuted(!enabled);
     }
 
     toggleCamera(enabled) {
@@ -400,7 +544,7 @@ class WebRTCService {
 
     async startScreenShare() {
 
-        const stream = await navigator.mediaDevices.getDisplayMedia({
+        const stream = await getDisplayMediaSafely({
             video: true
         });
 
