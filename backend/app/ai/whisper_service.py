@@ -25,7 +25,7 @@ class WhisperService:
                 if self._model is None:
                     print("Loading Whisper model: tiny (device=cpu, compute_type=int8)")
                     self._model = WhisperModel(
-                        "small",
+                        "base",
                         device="cpu",
                         compute_type="int8"
                     )
