@@ -311,17 +311,6 @@ async def _process_audio_chunk(
         )
         transcription_seconds = perf_counter() - transcription_started_at
 
-        # TEMP TRACE LOGGING (realtime pipeline investigation; safe to
-        # remove once subtitles are confirmed working end-to-end again).
-        # This is stage 5 of the pipeline trace:
-        #   Audio received -> Deepgram request -> Deepgram response ->
-        #   transcribe() return value -> [meeting_socket received transcript]
-        #   -> WebSocket payload sent
-        print(
-            f"[TRACE-5-MEETING-SOCKET-RECEIVED] chunk_id={chunk_id} "
-            f"transcript_result={transcript_result!r}"
-        )
-
         if not transcript_result.get("success", True):
             print(
                 f"[audio:{chunk_id}] Whisper failure: "
@@ -405,37 +394,26 @@ async def _process_audio_chunk(
         # complete. Translation, feedback persistence, and quality scoring
         # continue below without delaying the live transcript UI.
         dispatch_started_at = perf_counter()
-        transcript_payload = {
-            "type": "transcript",
-            "chunk_id": chunk_id,
-            "user_id": user_id,
-            "speaker_id": user_id,
-            "user_name": user_name,
-            "speaker_name": user_name,
-            "text": transcript,
-            "language": translation_source_language,
-            "source_language": translation_source_language,
-            "confidence": whisper_confidence,
-            "grammar_corrected": grammar_modified,
-            "original_text": grammar_result["original_text"],
-            "is_corrected": False,
-            "correctable": True,
-        }
         transcript_recipients = await manager.broadcast(
             meeting_id,
-            transcript_payload
+            {
+                "type": "transcript",
+                "chunk_id": chunk_id,
+                "user_id": user_id,
+                "speaker_id": user_id,
+                "user_name": user_name,
+                "speaker_name": user_name,
+                "text": transcript,
+                "language": translation_source_language,
+                "source_language": translation_source_language,
+                "confidence": whisper_confidence,
+                "grammar_corrected": grammar_modified,
+                "original_text": grammar_result["original_text"],
+                "is_corrected": False,
+                "correctable": True,
+            }
         )
         dispatch_seconds = perf_counter() - dispatch_started_at
-
-        # TEMP TRACE LOGGING (realtime pipeline investigation; safe to
-        # remove once subtitles are confirmed working end-to-end again).
-        # This is stage 6 of the pipeline trace (final stage):
-        #   ... -> meeting_socket received transcript ->
-        #   [WebSocket payload sent]
-        print(
-            f"[TRACE-6-WEBSOCKET-PAYLOAD-SENT] chunk_id={chunk_id} "
-            f"recipients={transcript_recipients} payload={transcript_payload!r}"
-        )
 
         await transcripts_collection.update_one(
             {"meeting_id": meeting_id, "chunk_id": chunk_id},

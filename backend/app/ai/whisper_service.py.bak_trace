@@ -21,14 +21,6 @@ DEEPGRAM_MODEL = "nova-3"
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 DEEPGRAM_TIMEOUT_SECONDS = 20
 
-# TEMP DEBUG (empty-transcript investigation): when Deepgram responds
-# HTTP 200 but with no transcript text, the exact WAV bytes that were sent
-# are dumped here so they can be replayed against a standalone Deepgram
-# script, independent of this application, to isolate whether the bug is
-# in WAV generation here or somewhere else in the pipeline / on Deepgram's
-# side for this audio.
-DEBUG_LAST_AUDIO_WAV_PATH = os.path.abspath("debug_last_audio.wav")
-
 
 class WhisperService:
 
@@ -150,14 +142,6 @@ class WhisperService:
             # callers may still pass raw WebM bytes -- those are sent to
             # Deepgram as-is with the matching content type, with no
             # intermediate decode or temp file needed either way.
-            # TEMP DEBUG (empty-transcript investigation): these are only
-            # meaningful for the WAV path (the realtime meeting pipeline);
-            # left as None for the raw WebM-bytes path, which has no PCM
-            # to measure without decoding it first.
-            sample_rate = None
-            channel_count = None
-            duration_seconds = None
-
             if isinstance(audio, (bytes, bytearray)):
                 audio_bytes = bytes(audio)
                 content_type = "audio/webm"
@@ -170,12 +154,7 @@ class WhisperService:
                         neginf=0.0,
                     ).reshape(-1)
                 )
-                sample_rate = 16000
-                channel_count = 1
-                duration_seconds = (
-                    (samples.size / sample_rate) if sample_rate else None
-                )
-                audio_bytes = self._pcm_float32_to_wav_bytes(samples, sample_rate)
+                audio_bytes = self._pcm_float32_to_wav_bytes(samples)
                 content_type = "audio/wav"
 
             params = {
@@ -190,17 +169,9 @@ class WhisperService:
                 "Content-Type": content_type,
             }
 
-            # TEMP DEBUG LOGGING (empty-transcript investigation; safe to
-            # remove once subtitles are confirmed working end-to-end again).
             print(
-                "[DEEPGRAM-AUDIO-DEBUG] "
-                f"content_type={content_type} "
-                f"audio_bytes={len(audio_bytes)} "
-                f"sample_rate={sample_rate} "
-                f"channels={channel_count} "
-                f"duration_seconds="
-                f"{f'{duration_seconds:.3f}' if duration_seconds is not None else None} "
-                f"language={language} model={DEEPGRAM_MODEL}"
+                f"[DEEPGRAM-CALL] model={DEEPGRAM_MODEL} language={language} "
+                f"bytes={len(audio_bytes)} content_type={content_type}"
             )
 
             try:
@@ -211,27 +182,10 @@ class WhisperService:
                     data=audio_bytes,
                     timeout=DEEPGRAM_TIMEOUT_SECONDS,
                 )
-                print(
-                    f"[DEEPGRAM-RESPONSE-DEBUG] status_code={response.status_code} "
-                    f"body_first_300_chars={response.text[:300]!r}"
-                )
                 response.raise_for_status()
                 payload = response.json()
             except requests.exceptions.RequestException as error:
-                # Surface Deepgram's actual error body (e.g. bad API key,
-                # unsupported model/language combination, quota exceeded)
-                # instead of only the generic requests exception message --
-                # this is normally the single most useful line for
-                # diagnosing why no transcript came back.
-                response_detail = getattr(error, "response", None)
-                if response_detail is not None:
-                    print(
-                        f"[DEEPGRAM-ERROR] request failed: {error} "
-                        f"status_code={response_detail.status_code} "
-                        f"body={response_detail.text[:2000]!r}"
-                    )
-                else:
-                    print(f"[DEEPGRAM-ERROR] request failed: {error}")
+                print(f"[DEEPGRAM-ERROR] request failed: {error}")
                 return {
                     "success": False,
                     "reason": f"deepgram_error: {error}",
@@ -247,35 +201,6 @@ class WhisperService:
                 best = alternatives[0] if alternatives else {}
 
                 transcript = (best.get("transcript") or "").strip()
-
-                # TEMP DEBUG (empty-transcript investigation): Deepgram
-                # answered successfully but produced no text. Dump the
-                # exact bytes we sent so they can be replayed against a
-                # standalone Deepgram script outside this app -- if that
-                # script also gets an empty transcript back, the WAV we
-                # generated is the problem; if it works there, the bug is
-                # elsewhere in this pipeline (params, headers, language).
-                if (
-                    response.status_code == 200
-                    and not transcript
-                    and content_type == "audio/wav"
-                ):
-                    try:
-                        with open(DEBUG_LAST_AUDIO_WAV_PATH, "wb") as debug_file:
-                            debug_file.write(audio_bytes)
-                        print(
-                            "[DEEPGRAM-DEBUG-WAV-DUMPED] "
-                            f"path={DEBUG_LAST_AUDIO_WAV_PATH} "
-                            f"bytes={len(audio_bytes)} "
-                            f"sample_rate={sample_rate} channels={channel_count} "
-                            f"duration_seconds="
-                            f"{f'{duration_seconds:.3f}' if duration_seconds is not None else None}"
-                        )
-                    except OSError as write_error:
-                        print(
-                            "[DEEPGRAM-DEBUG-WAV-DUMP-FAILED] "
-                            f"path={DEBUG_LAST_AUDIO_WAV_PATH} error={write_error}"
-                        )
 
                 # Deepgram returns confidence as a 0.0-1.0 float. Existing
                 # downstream code (confidence_service.py,
@@ -317,19 +242,18 @@ class WhisperService:
                     "segments": [],
                 }
 
-            # Pipeline trace stage: transcribe() return value.
-            result = {
+            print(
+                f"[DEEPGRAM-RESULT] language={language} transcript={transcript!r} "
+                f"confidence={confidence}"
+            )
+
+            return {
                 "success": True,
                 "language": language,
                 "text": transcript,
                 "confidence": confidence,
                 "segments": segments,
             }
-            print(
-                f"[TRACE-RETURN-VALUE] transcribe() -> {result!r}"
-            )
-
-            return result
 
         except Exception as error:
             # Never let an unexpected error crash the WebSocket worker --
