@@ -1,50 +1,39 @@
-from app.config.database import transcripts_collection
+from app.config.database import chat_messages_collection
+from app.utils.timezone_format import format_ist
 
 
 async def exported_chats_service(user_id: str):
 
     documents = (
-        await transcripts_collection
+        await chat_messages_collection
         .find(
-            {
-                "user_id": user_id
-            }
+            {"$or": [
+                {"sender_id": user_id},
+                {"recipient_ids": user_id},
+            ]}
         )
         .sort("created_at", -1)
-        .limit(5)
-        .to_list(length=5)
+        .to_list(length=None)
     )
 
-    exported_files = []
+    chat_history = []
 
     for document in documents:
 
         created_at = document.get("created_at")
 
-        exported_files.append({
+        chat_history.append({
 
             "id": str(document.get("_id")),
 
-            "filename": document.get(
-                "file_name",
-                "Transcript"
-            ),
+            "meeting_id": document.get("meeting_id", "-"),
+            "sender_name": document.get("sender_name", "Participant"),
+            "text": document.get("original_text") or document.get("text") or "",
 
-            "format": document.get(
-                "file_format",
-                "PDF"
-            ),
-
-            "size": document.get(
-                "file_size",
-                "-"
-            ),
-
-            "created_at": (
-                created_at.strftime("%d %b %Y %I:%M %p")
-                if created_at
-                else "-"
-            )
+            # Displayed in IST -- see app.utils.timezone_format -- to
+            # match every other conversation-related timestamp in the app;
+            # created_at itself is left as the stored UTC value.
+            "created_at": format_ist(created_at)
 
         })
 
@@ -52,8 +41,8 @@ async def exported_chats_service(user_id: str):
 
         "success": True,
 
-        "message": "Exported chats fetched successfully",
+        "message": "Chat history fetched successfully",
 
-        "data": exported_files
+        "data": chat_history
 
     }

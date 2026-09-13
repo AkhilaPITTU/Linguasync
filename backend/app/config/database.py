@@ -17,4 +17,10 @@ meetings_collection = database["meetings"]
 transcripts_collection = database["transcripts"]
 
 translations_collection = database["translations"]
+chat_messages_collection = database["chat_messages"]
 invitations_collection = database["invitations"]
+
+# Conversation PDF export feature: one document per exported PDF (see
+# app/services/conversation_export_service.py). Additive only -- no
+# existing collection above is touched.
+pdf_exports_collection = database["pdf_exports"]

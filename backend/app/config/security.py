@@ -64,10 +64,6 @@ def create_access_token(data: dict) -> str:
         algorithm=settings.ALGORITHM
     )
 
-    print("\n========== TOKEN CREATED ==========")
-    print(token)
-    print("===================================\n")
-
     return token
 
 
@@ -79,26 +75,11 @@ def verify_token(token: str):
 
     try:
 
-        print("\n========== VERIFY TOKEN ==========")
-        print("Incoming Token:")
-        print(token)
-        print("----------------------------------")
-        print("SECRET_KEY:")
-        print(settings.SECRET_KEY)
-        print("----------------------------------")
-        print("ALGORITHM:")
-        print(settings.ALGORITHM)
-
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
-
-        print("----------------------------------")
-        print("PAYLOAD:")
-        print(payload)
-        print("==================================\n")
 
         if payload.get("type") != "access":
             print("Invalid token type")

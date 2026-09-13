@@ -1,7 +1,11 @@
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, status, UploadFile
 
 from app.config.security import get_user_id
-from app.services.profile_service import profile_service
+from app.services.profile_service import (
+    profile_service,
+    update_profile_image_service,
+    update_profile_service,
+)
 
 
 async def get_profile(
@@ -35,3 +39,32 @@ async def get_profile(
         )
 
     return await profile_service(user_id)
+
+
+async def update_profile(data, authorization: str):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization Header",
+        )
+
+    user_id = get_user_id(authorization.split(" ", 1)[1])
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or Expired Token",
+        )
+
+    return await update_profile_service(user_id, data.model_dump(exclude_none=True))
+
+
+async def update_profile_image(image: UploadFile, authorization: str):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Authorization Header")
+    user_id = get_user_id(authorization.split(" ", 1)[1])
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or Expired Token")
+    result = await update_profile_image_service(user_id, image)
+    if not result.get("success"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.get("message"))
+    return result

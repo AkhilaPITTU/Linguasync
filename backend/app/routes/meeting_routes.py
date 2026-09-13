@@ -6,6 +6,7 @@ from app.controllers.meeting_controller import (
     leave_meeting_controller,
     end_meeting_controller,
     get_meeting_controller,
+    get_meeting_history_controller,
     get_participants_controller,
     get_active_meeting_controller,
 )
@@ -98,6 +99,18 @@ async def get_active_meeting(
     return await get_active_meeting_controller(
         authorization=authorization
     )
+
+
+# ==========================================
+# GET MEETING DETAILS
+# ==========================================
+
+@router.get("/{meeting_id}/history")
+async def get_meeting_history(
+    meeting_id: str,
+    authorization: str = Header(...),
+):
+    return await get_meeting_history_controller(meeting_id, authorization)
 
 
 # ==========================================

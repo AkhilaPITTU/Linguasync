@@ -6,6 +6,7 @@ import {
 } from "../services/invitationService";
 
 import "./AddParticipants.css";
+import { showToast } from "../components/notification/toastService";
 
 // This component is now rendered as an in-call modal from
 // MeetingRoom instead of being mounted at its own route. It used
@@ -23,11 +24,7 @@ const AddParticipants = ({ meetingId, onClose }) => {
     const [search, setSearch] = useState("");
     const [sending, setSending] = useState(false);
 
-    useEffect(() => {
-        loadUsers();
-    }, []);
-
-    const loadUsers = async () => {
+    async function loadUsers() {
         try {
             const response = await getUsers();
 
@@ -36,11 +33,15 @@ const AddParticipants = ({ meetingId, onClose }) => {
             }
         } catch (error) {
             console.error(error);
-            alert("Failed to load users.");
+            showToast("Failed to load users.", "error");
         } finally {
             setLoading(false);
         }
-    };
+    }
+
+    useEffect(() => {
+        void Promise.resolve().then(loadUsers);
+    }, []);
 
     const toggleUser = (userId) => {
         if (selectedUsers.includes(userId)) {
@@ -53,7 +54,7 @@ const AddParticipants = ({ meetingId, onClose }) => {
     const inviteUsers = async () => {
 
         if (selectedUsers.length === 0) {
-            alert("Please select at least one participant.");
+            showToast("Please select at least one participant.", "error");
             return;
         }
 
@@ -67,19 +68,20 @@ const AddParticipants = ({ meetingId, onClose }) => {
             );
 
             if (response.success) {
-                alert("Invitations sent successfully.");
+                showToast("Invitations sent successfully.");
                 onClose();
             } else {
-                alert(response.message || "Failed to send invitations.");
+                showToast(response.message || "Failed to send invitations.", "error");
             }
 
         } catch (error) {
 
             console.error(error);
 
-            alert(
+            showToast(
                 error?.message ||
-                "Failed to send invitations."
+                "Failed to send invitations.",
+                "error",
             );
 
         } finally {

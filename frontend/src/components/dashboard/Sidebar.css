@@ -31,6 +31,7 @@ SIDEBAR
     gap:15px;
 
     margin-bottom:45px;
+    text-decoration:none;
 
 }
 
@@ -54,7 +55,8 @@ SIDEBAR
 
     align-items:center;
 
-    font-size:28px;
+    font-size:17px;
+    font-weight:800;
 
 }
 
@@ -136,78 +138,6 @@ nav{
 
 /* ======================================= */
 
-.premium-box{
-
-    margin-top:30px;
-
-    background:linear-gradient(
-        135deg,
-        #1E293B,
-        #312E81
-    );
-
-    padding:22px;
-
-    border-radius:22px;
-
-}
-
-.premium-box h3{
-
-    color:white;
-
-    margin-bottom:12px;
-
-}
-
-.premium-box p{
-
-    color:#CBD5E1;
-
-    font-size:14px;
-
-    line-height:1.6;
-
-    margin-bottom:20px;
-
-}
-
-.premium-box button{
-
-    width:100%;
-
-    border:none;
-
-    padding:14px;
-
-    border-radius:14px;
-
-    background:#7C3AED;
-
-    color:white;
-
-    display:flex;
-
-    justify-content:center;
-
-    align-items:center;
-
-    gap:8px;
-
-    cursor:pointer;
-
-    transition:.3s;
-
-}
-
-.premium-box button:hover{
-
-    background:#6D28D9;
-
-}
-
-/* ======================================= */
-
 .logout{
 
     width:100%;
@@ -261,7 +191,7 @@ padding:18px;
 .logo h2,
 .logo p,
 .menu-title,
-.premium-box{
+.logout span{
 
 display:none;
 

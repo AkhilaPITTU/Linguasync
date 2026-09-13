@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./BottomControls.css";
 
@@ -11,92 +11,145 @@ import {
     FaUsers,
     FaUserPlus,
     FaLanguage,
-    FaDownload,
     FaPhoneSlash,
     FaClosedCaptioning,
     FaVolumeUp,
     FaVolumeMute,
+    FaDesktop,
+    FaStop,
+    FaSpinner,
 } from "react-icons/fa";
 
 import webrtcService from "../../services/webrtcService";
 import websocketService from "../../services/websocketService";
 
 import {
-    leaveMeeting as leaveMeetingAPI
+    leaveMeeting as leaveMeetingAPI,
+    endMeeting as endMeetingAPI,
 } from "../../services/meetingService";
+import {
+    downloadConversationPdf,
+    getExportErrorMessage,
+} from "../../services/conversationExportService";
+import { showToast } from "../notification/toastService";
 
-// NOTE: "Add Participants" no longer navigates to a separate route.
-// Navigating away used to unmount MeetingRoom, whose cleanup effect
-// stops the local camera/mic tracks and tears down the websocket +
-// peer connections -- which looked like your video "muting itself"
-// right after inviting someone. Now it just calls onAddParticipants
-// (passed down from MeetingRoom), which opens an in-call modal
-// instead, so MeetingRoom stays mounted the whole time.
-
-const BottomControls = ({ onAddParticipants }) => {
+const BottomControls = ({
+    onAddParticipants,
+    meetingType = "video",
+    onOpenPanel = () => {},
+    onSpeakerChange = () => {},
+    onMicrophoneChange = () => {},
+    onBeforeLeave = async () => ({ flushed: false }),
+    microphoneMuted = false,
+    speakerMuted = false,
+    isMeetingHost = false,
+}) => {
 
     const navigate = useNavigate();
 
-    const [micOn, setMicOn] = useState(true);
-    const [cameraOn, setCameraOn] = useState(true);
-    const [speakerOn, setSpeakerOn] = useState(true);
+    const isAudioCall =
+        meetingType?.toLowerCase() === "audio";
 
-    const meetingId = window.location.pathname.split("/").pop();
-    const userId = localStorage.getItem("user_id");
+    const isVideoCall =
+        !isAudioCall;
 
-    // ==========================
-    // Toggle Microphone
-    // ==========================
+    const micOn = !microphoneMuted;
+
+    const [cameraOn, setCameraOn] =
+        useState(isVideoCall);
+
+    const speakerOn = !speakerMuted;
+
+    const [screenSharing, setScreenSharing] = useState(false);
+
+    const [leaveDialog, setLeaveDialog] =
+        useState(false);
+
+    const [isLeaving, setIsLeaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const flushPromiseRef = useRef(null);
+
+    const meetingId =
+        window.location.pathname
+            .split("/")
+            .pop();
+
+    const rawUserId =
+        localStorage.getItem("user_id");
+
+    const userId =
+        rawUserId?.includes(":")
+            ? rawUserId.split(":")[0]
+            : rawUserId;
+
+    // ==========================================
+    // TOGGLE MICROPHONE
+    // ==========================================
 
     const toggleMic = () => {
 
-        const stream = webrtcService.localStream;
-
-        if (!stream) return;
-
-        stream.getAudioTracks().forEach(track => {
-
-            track.enabled = !track.enabled;
-
-        });
-
-        setMicOn(prev => !prev);
-
+        onMicrophoneChange(!micOn);
     };
 
-    // ==========================
-    // Toggle Camera
-    // ==========================
+    // ==========================================
+    // TOGGLE CAMERA
+    // ==========================================
 
     const toggleCamera = () => {
 
-        const stream = webrtcService.localStream;
+        // Camera does not exist in audio calls
+        if (isAudioCall) {
+            console.log(
+                "Camera is disabled for audio calls."
+            );
+            return;
+        }
+
+        const stream =
+            webrtcService.localStream;
 
         if (!stream) return;
 
-        stream.getVideoTracks().forEach(track => {
+        const videoTracks =
+            stream.getVideoTracks();
 
-            track.enabled = !track.enabled;
+        if (videoTracks.length === 0) {
+            console.warn(
+                "No video track available."
+            );
+            return;
+        }
 
-        });
+        const newState =
+            !videoTracks[0].enabled;
 
-        setCameraOn(prev => !prev);
+        videoTracks.forEach(
+            (track) => {
+                track.enabled = newState;
+            }
+        );
 
+        setCameraOn(newState);
+
+        console.log(
+            "Camera:",
+            newState ? "ON" : "OFF"
+        );
     };
 
-    // ==========================
-    // Toggle Speaker
-    // ==========================
+    // ==========================================
+    // TOGGLE SPEAKER
+    // ==========================================
 
     const toggleSpeaker = () => {
 
-        setSpeakerOn(prev => !prev);
+        onSpeakerChange(!speakerOn);
 
     };
 
-    // ==========================
-    // Add Participants
-    // ==========================
+    // ==========================================
+    // ADD PARTICIPANTS
+    // ==========================================
 
     const handleAddParticipants = () => {
 
@@ -106,103 +159,254 @@ const BottomControls = ({ onAddParticipants }) => {
 
     };
 
-    // ==========================
-    // Leave Meeting
-    // Backend decides whether to
-    // end meeting or remove user.
-    // ==========================
+    // ==========================================
+    // LEAVE MEETING
+    // ==========================================
 
-    const leaveMeeting = async () => {
+    useEffect(() => {
+
+        const handleEscape = (event) => {
+
+            if (event.key === "Escape" && !isExporting) setLeaveDialog(false);
+
+        };
+
+        window.addEventListener("keydown", handleEscape);
+
+        return () => window.removeEventListener("keydown", handleEscape);
+
+    }, [isExporting]);
+
+    const prepareForLeave = async () => {
+        if (!flushPromiseRef.current) {
+            flushPromiseRef.current = Promise.resolve(onBeforeLeave());
+        }
+        return flushPromiseRef.current;
+    };
+
+    const completeLeave = async () => {
+
+        if (isLeaving) return;
+        setIsLeaving(true);
 
         try {
 
+            const flushResult = await prepareForLeave();
+            console.log("[conversation-save] frontend flush", flushResult);
+
             if (meetingId && userId) {
 
-                await leaveMeetingAPI(
-                    meetingId,
-                    userId
-                );
+                if (isMeetingHost) {
+                    await endMeetingAPI(meetingId, userId);
+                } else {
+                    await leaveMeetingAPI(meetingId, userId);
+                }
 
             }
 
-        }
+            // `meeting_id` is only a convenience used after creating a
+            // meeting. Do not let it point at a completed/left meeting.
+            if (localStorage.getItem("meeting_id") === meetingId) {
+                localStorage.removeItem("meeting_id");
+            }
+            if (sessionStorage.getItem("meeting_id") === meetingId) {
+                sessionStorage.removeItem("meeting_id");
+            }
 
-        catch (error) {
+            // Keep any mounted dashboard view in this tab in sync with the
+            // completed leave/end request. The dashboard still verifies this
+            // state with the backend when it loads.
+            window.dispatchEvent(new CustomEvent("meeting-state-cleared"));
+
+            websocketService.disconnect();
+            webrtcService.closeConnection();
+            navigate("/dashboard");
+
+        } catch (error) {
 
             console.error(
                 "Leave Meeting Error:",
                 error
             );
+            showToast("Unable to finalize the meeting. Please try again.");
+            setIsLeaving(false);
+        }
+
+    };
+
+    // ==========================================
+    // SAVE & EXPORT (End Call confirmation modal)
+    // ==========================================
+
+    const handleSaveAndExport = async () => {
+
+        if (isExporting || isLeaving) return;
+
+        setIsExporting(true);
+
+        try {
+
+            await downloadConversationPdf(meetingId);
+            showToast("Your conversation PDF has been downloaded.", "success");
+
+            setLeaveDialog(false);
+            await completeLeave();
+
+        } catch (exportError) {
+
+            console.error("Conversation PDF export error:", exportError);
+            const message = await getExportErrorMessage(exportError);
+            showToast(message, "error");
+            // Keep the user in the meeting (and the modal open) so they can
+            // retry, or choose "Leave Without Saving" instead.
+
+        } finally {
+
+            setIsExporting(false);
 
         }
 
-        websocketService.disconnect();
+    };
 
-        webrtcService.closeConnection();
+    const handleLeaveWithoutSaving = () => {
 
-        navigate("/dashboard");
+        if (isExporting) return;
+
+        setLeaveDialog(false);
+        completeLeave();
+
+    };
+
+    const handleCancelLeaveDialog = () => {
+
+        if (isExporting) return;
+
+        setLeaveDialog(false);
+
+    };
+
+    const toggleScreenShare = async () => {
+        try {
+            if (screenSharing) {
+                await webrtcService.stopScreenShare();
+                setScreenSharing(false);
+            } else {
+                const screenStream = await webrtcService.startScreenShare();
+                screenStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+                    setScreenSharing(false);
+                }, { once: true });
+                setScreenSharing(true);
+            }
+        } catch (error) {
+            console.error("Screen sharing error:", error);
+            setScreenSharing(false);
+        }
+    };
+
+    const openLeaveDialog = () => {
+
+        setLeaveDialog(true);
 
     };
 
     return (
 
+        <>
         <div className="bottom-controls">
 
-            {/* Left Controls */}
+            {/* =================================
+                LEFT CONTROLS
+            ================================= */}
 
             <div className="control-group">
 
+                {/* MICROPHONE */}
+
                 <button
-                    className={`control-btn ${micOn ? "active" : ""}`}
+                    type="button"
+                    className={`control-btn ${
+                        micOn ? "active" : ""
+                    }`}
                     onClick={toggleMic}
-                    title="Microphone"
+                    aria-pressed={!micOn}
+                    title={
+                        micOn
+                            ? "Mute Microphone"
+                            : "Unmute Microphone"
+                    }
                 >
 
-                    {
-                        micOn
-                            ? <FaMicrophone />
-                            : <FaMicrophoneSlash />
+                    {micOn
+                        ? <FaMicrophone />
+                        : <FaMicrophoneSlash />
                     }
 
                 </button>
 
-                <button
-                    className={`control-btn ${cameraOn ? "active" : ""}`}
-                    onClick={toggleCamera}
-                    title="Camera"
-                >
+                {/* CAMERA - VIDEO CALL ONLY */}
 
-                    {
-                        cameraOn
+                {isVideoCall && (
+
+                    <button
+                        type="button"
+                        className={`control-btn ${
+                            cameraOn ? "active" : ""
+                        }`}
+                        onClick={toggleCamera}
+                        title={
+                            cameraOn
+                                ? "Turn Camera Off"
+                                : "Turn Camera On"
+                        }
+                    >
+
+                        {cameraOn
                             ? <FaVideo />
                             : <FaVideoSlash />
-                    }
+                        }
 
-                </button>
+                    </button>
+
+                )}
+
+                {/* SPEAKER */}
 
                 <button
-                    className={`control-btn ${speakerOn ? "active" : ""}`}
+                    type="button"
+                    className={`control-btn ${
+                        speakerOn ? "active" : ""
+                    }`}
                     onClick={toggleSpeaker}
-                    title="Speaker"
+                    aria-pressed={!speakerOn}
+                    title={
+                        speakerOn
+                            ? "Mute Speaker"
+                            : "Unmute Speaker"
+                    }
                 >
 
-                    {
-                        speakerOn
-                            ? <FaVolumeUp />
-                            : <FaVolumeMute />
+                    {speakerOn
+                        ? <FaVolumeUp />
+                        : <FaVolumeMute />
                     }
 
                 </button>
 
             </div>
 
-            {/* Center Controls */}
+            {/* =================================
+                CENTER CONTROLS
+            ================================= */}
 
             <div className="control-group">
 
+                {/* ADD PARTICIPANTS */}
+
                 <button
                     className="control-btn"
-                    onClick={handleAddParticipants}
+                    onClick={
+                        handleAddParticipants
+                    }
                     title="Add Participants"
                 >
 
@@ -210,8 +414,11 @@ const BottomControls = ({ onAddParticipants }) => {
 
                 </button>
 
+                {/* PARTICIPANTS */}
+
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("participants")}
                     title="Participants"
                 >
 
@@ -219,8 +426,11 @@ const BottomControls = ({ onAddParticipants }) => {
 
                 </button>
 
+                {/* CHAT */}
+
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("chat")}
                     title="Chat"
                 >
 
@@ -228,8 +438,11 @@ const BottomControls = ({ onAddParticipants }) => {
 
                 </button>
 
+                {/* LIVE CAPTIONS */}
+
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("transcript")}
                     title="Live Captions"
                 >
 
@@ -237,8 +450,11 @@ const BottomControls = ({ onAddParticipants }) => {
 
                 </button>
 
+                {/* TRANSLATION */}
+
                 <button
                     className="control-btn"
+                    onClick={() => onOpenPanel("translation")}
                     title="Translation"
                 >
 
@@ -247,32 +463,31 @@ const BottomControls = ({ onAddParticipants }) => {
                 </button>
 
                 <button
-                    className="control-btn"
-                    title="Download Transcript"
+                    className={`control-btn ${screenSharing ? "active" : ""}`}
+                    onClick={toggleScreenShare}
+                    title={screenSharing ? "Stop Screen Sharing" : "Share Screen"}
                 >
-
-                    <FaDownload />
-
+                    {screenSharing ? <FaStop /> : <FaDesktop />}
                 </button>
 
             </div>
 
-            {/* Right Controls */}
+            {/* =================================
+                RIGHT CONTROLS
+            ================================= */}
 
             <div className="control-group">
 
                 <button
                     className="leave-btn"
-                    onClick={leaveMeeting}
-                    title="Leave Meeting"
+                    onClick={openLeaveDialog}
+                    title={isMeetingHost ? "End Meeting" : "Leave Meeting"}
                 >
 
                     <FaPhoneSlash />
 
                     <span>
-
-                        Leave
-
+                        {isMeetingHost ? "End" : "Leave"}
                     </span>
 
                 </button>
@@ -281,8 +496,67 @@ const BottomControls = ({ onAddParticipants }) => {
 
         </div>
 
-    );
+        {leaveDialog && (
 
+            <div
+                className="leave-dialog-backdrop"
+                role="presentation"
+                onMouseDown={handleCancelLeaveDialog}
+            >
+
+                <section
+                    className="leave-dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="leave-dialog-title"
+                    onMouseDown={(event) => event.stopPropagation()}
+                >
+
+                    <h2 id="leave-dialog-title">
+                        Save conversation before leaving?
+                    </h2>
+
+                    <p>
+                        Download a PDF of this meeting in your preferred language before you leave.
+                    </p>
+
+                    <div className="leave-dialog-actions">
+
+                        <button
+                            className="leave-dialog-primary"
+                            onClick={handleSaveAndExport}
+                            disabled={isExporting || isLeaving}
+                        >
+                            {isExporting
+                                ? <><FaSpinner className="spin" /> Preparing PDF…</>
+                                : "Save & Export"}
+                        </button>
+
+                        <button
+                            className="leave-dialog-danger"
+                            onClick={handleLeaveWithoutSaving}
+                            disabled={isExporting || isLeaving}
+                        >
+                            {isLeaving ? "Leaving..." : "Leave Without Saving"}
+                        </button>
+
+                        <button
+                            className="leave-dialog-cancel"
+                            onClick={handleCancelLeaveDialog}
+                            disabled={isExporting || isLeaving}
+                        >
+                            Cancel
+                        </button>
+
+                    </div>
+
+                </section>
+
+            </div>
+        )}
+        </>
+
+    );
 };
 
 export default BottomControls;

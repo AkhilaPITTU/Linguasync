@@ -6,7 +6,7 @@ class SpeechAccuracyService:
     Speech Accuracy Service
 
     Estimates the reliability of the transcript
-    produced by Whisper.
+    produced by the ASR provider.
 
     Returns:
     {

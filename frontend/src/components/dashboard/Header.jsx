@@ -1,158 +1,32 @@
 import "./Header.css";
 
-import { useEffect, useState } from "react";
-
-import {
-    FiSearch,
-    FiBell,
-    FiMoon,
-    FiSun,
-    FiChevronDown,
-    FiWifi
-} from "react-icons/fi";
+import { FiUser } from "react-icons/fi";
+import { Link } from "react-router-dom";
 
 function Header() {
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const userName =
+    storedUser.name ||
+    storedUser.full_name ||
+    localStorage.getItem("user_name") ||
+    "there";
 
-    const [darkMode, setDarkMode] = useState(true);
+  return (
+    <header className="dashboard-header-bar">
+      <div>
+        <p className="dashboard-header-kicker">YOUR WORKSPACE</p>
+        <h1>Welcome back, {userName}</h1>
+        <p className="dashboard-header-copy">
+          Keep your multilingual communication organized from one place.
+        </p>
+      </div>
 
-    const [currentTime, setCurrentTime] = useState(new Date());
-
-    const [user, setUser] = useState({});
-
-    useEffect(() => {
-
-        const timer = setInterval(() => {
-            setCurrentTime(new Date());
-        }, 1000);
-
-        const storedUser = JSON.parse(
-            localStorage.getItem("user")
-        );
-
-        if (storedUser) {
-            setUser(storedUser);
-        }
-
-        return () => clearInterval(timer);
-
-    }, []);
-
-    return (
-
-        <header className="header">
-
-            {/* Search */}
-
-            <div className="search-container">
-
-                <FiSearch />
-
-                <input
-                    type="text"
-                    placeholder="Search calls, translations, contacts..."
-                />
-
-            </div>
-
-            {/* Right */}
-
-            <div className="header-right">
-
-                {/* Server Status */}
-
-                <div className="server-status">
-
-                    <FiWifi />
-
-                    <span>Online</span>
-
-                </div>
-
-                {/* Date */}
-
-                <div className="date-box">
-
-                    {currentTime.toLocaleDateString()}
-
-                </div>
-
-                {/* Time */}
-
-                <div className="time-box">
-
-                    {currentTime.toLocaleTimeString()}
-
-                </div>
-
-                {/* Notifications */}
-
-                <button className="icon-button">
-
-                    <FiBell />
-
-                    <span className="notification-dot"></span>
-
-                </button>
-
-                {/* Theme */}
-
-                <button
-                    className="icon-button"
-                    onClick={() => setDarkMode(!darkMode)}
-                >
-
-                    {
-                        darkMode
-                            ? <FiSun />
-                            : <FiMoon />
-                    }
-
-                </button>
-
-                {/* Profile */}
-
-                <div className="profile-box">
-
-                    <img
-                        src="/images/user.png"
-                        alt="Profile"
-                    />
-
-                    <div>
-
-                        <h4>
-
-                            {
-                                user.name ||
-                                user.full_name ||
-                                localStorage.getItem("user_name") ||
-                                "User"
-                            }
-
-                        </h4>
-
-                        <span>
-
-                            {
-                                user.role ||
-                                localStorage.getItem("user_role") ||
-                                "User"
-                            }
-
-                        </span>
-
-                    </div>
-
-                    <FiChevronDown />
-
-                </div>
-
-            </div>
-
-        </header>
-
-    );
-
+      <Link to="/profile" className="dashboard-profile-link" aria-label="Open profile">
+        <FiUser aria-hidden="true" />
+        <span>Profile</span>
+      </Link>
+    </header>
+  );
 }
 
 export default Header;

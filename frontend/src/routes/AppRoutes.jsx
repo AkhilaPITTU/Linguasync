@@ -1,7 +1,8 @@
 import {
     Routes,
     Route,
-    Navigate
+    Navigate,
+    useLocation
 } from "react-router-dom";
 
 import Landing from "../pages/Landing";
@@ -13,6 +14,10 @@ import ResetPassword from "../pages/ResetPassword";
 import CreateMeeting from "../pages/CreateMeeting";
 import MeetingRoom from "../pages/MeetingRoom";
 import AddParticipants from "../pages/AddParticipants";
+import RecentCallsPage from "../pages/RecentCallsPage";
+import ProfileOverviewPage from "../pages/ProfileOverviewPage";
+import VerifyPdfPage from "../pages/VerifyPdfPage";
+import IncomingInvitationPopup from "../components/invitations/IncomingInvitationPopup";
 
 
 // ==========================================
@@ -21,13 +26,15 @@ import AddParticipants from "../pages/AddParticipants";
 
 function ProtectedRoute({ children }) {
 
+    const location = useLocation();
+
     const token = localStorage.getItem(
         "access_token"
     );
 
     return token
-        ? children
-        : <Navigate to="/login" replace />;
+        ? <><IncomingInvitationPopup />{children}</>
+        : <Navigate to="/login" replace state={{ from: location }} />;
 
 }
 
@@ -82,6 +89,33 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <CreateMeeting />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/call-history"
+                element={
+                    <ProtectedRoute>
+                        <RecentCallsPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/profile"
+                element={
+                    <ProtectedRoute>
+                        <ProfileOverviewPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/verify-pdf"
+                element={
+                    <ProtectedRoute>
+                        <VerifyPdfPage />
                     </ProtectedRoute>
                 }
             />

@@ -1,12 +1,27 @@
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
 from bson import ObjectId
 
-from app.config.database import database, users_collection
+from app.config.database import (
+    chat_messages_collection,
+    database,
+    transcripts_collection,
+    translations_collection,
+    users_collection,
+)
 from app.models.Meeting import Meeting
+from app.ai.language_config import SUPPORTED_LANGUAGES, language_code
 
 meetings_collection = database["meetings"]
+logger = logging.getLogger(__name__)
+
+LANGUAGE_CODES = SUPPORTED_LANGUAGES
+
+
+def _source_language_code(preferred_language: str) -> str:
+    return language_code(preferred_language)
 
 
 # ==========================================
@@ -19,6 +34,9 @@ async def create_meeting(
     preferred_language: str,
     output_mode: str
 ):
+
+    if not _source_language_code(preferred_language):
+        return {"success": False, "message": "Unsupported meeting language."}
 
     # Get Host Details
     user = await users_collection.find_one(
@@ -44,6 +62,9 @@ async def create_meeting(
                 "user_id": host_id,
                 "user_name": host_name,
                 "language": preferred_language,
+                "preferred_language": preferred_language,
+                "source_language": _source_language_code(preferred_language),
+                "output_mode": output_mode,
                 "mic_enabled": True,
                 "camera_enabled": True,
                 "screen_share": False,
@@ -55,7 +76,9 @@ async def create_meeting(
 
         status="active",
 
-        source_language="Detecting...",
+        # This is the host's explicitly selected source language.  The live
+        # pipeline never performs automatic language detection.
+        source_language=_source_language_code(preferred_language),
 
         preferred_language=preferred_language,
 
@@ -92,11 +115,24 @@ async def join_meeting(
     meeting_id: str,
     user_id: str,
     user_name: str,
-    language: str
+    preferred_language: str,
+    source_language: str | None,
+    output_mode: str,
 ):
     print("\n========== JOIN MEETING ==========")
     print("Meeting ID:", meeting_id)
     print("User ID:", user_id)
+    print(
+        "[LANGUAGE-PIPELINE] stage=join_request "
+        f"user_id={user_id} preferred_language={preferred_language!r} "
+        f"source_language={source_language!r} output_mode={output_mode!r}"
+    )
+    logger.info(
+        "Join request -> user_id=%s preferred_language=%s source_language=%s",
+        user_id,
+        preferred_language,
+        source_language,
+    )
 
     meeting = await meetings_collection.find_one(
         {
@@ -113,22 +149,51 @@ async def join_meeting(
             "message": "Meeting not found."
         }
 
+    normalized_user_id = str(user_id)
+    participant_ids = [
+        str(participant.get("user_id", ""))
+        for participant in meeting.get("participants", [])
+    ]
+    print("[MEETING-IDENTITY]", {
+        "current_user_id": normalized_user_id,
+        "host_id": str(meeting.get("host_id", "")),
+        "participants": participant_ids,
+    })
+
     exists = any(
-        participant["user_id"] == user_id
+        str(participant.get("user_id", "")) == normalized_user_id
         for participant in meeting["participants"]
     )
 
-    if not exists:
+    # The browser supplies the ISO code for the one language selected before
+    # joining. Retain it rather than replacing it with a default value.
+    resolved_source_language = _source_language_code(
+        source_language or preferred_language
+    )
+    if not resolved_source_language:
+        return {"success": False, "message": "Unsupported participant language."}
 
-        participant = {
-            "user_id": user_id,
-            "user_name": user_name,
-            "language": language,
-            "mic_enabled": True,
-            "camera_enabled": True,
-            "screen_share": False,
-            "speaking": False
-        }
+    participant = {
+        "user_id": user_id,
+        "user_name": user_name,
+        # Keep language for existing UI and older meeting records.
+        "language": preferred_language,
+        "preferred_language": preferred_language,
+        "source_language": resolved_source_language,
+        "output_mode": output_mode,
+        "mic_enabled": True,
+        "camera_enabled": True,
+        "screen_share": False,
+        "speaking": False
+    }
+
+    print(
+        "[LANGUAGE-PIPELINE] stage=mongodb_participant_write "
+        f"user_id={user_id} preferred_language={participant['preferred_language']!r} "
+        f"source_language={participant['source_language']!r}"
+    )
+
+    if not exists:
 
         result = await meetings_collection.update_one(
             {"meeting_id": meeting_id},
@@ -141,8 +206,41 @@ async def join_meeting(
 
         print("Modified Count:", result.modified_count)
 
+    else:
+        # Invitation acceptance can add the participant before this
+        # idempotent join request. Preserve the selected per-call settings.
+        await meetings_collection.update_one(
+            {
+                "meeting_id": meeting_id,
+                "participants.user_id": user_id,
+            },
+            {
+                "$set": {
+                    "participants.$.language": preferred_language,
+                    "participants.$.preferred_language": preferred_language,
+                    "participants.$.source_language": resolved_source_language,
+                    "participants.$.output_mode": output_mode,
+                }
+            }
+        )
+
     updated_meeting = await meetings_collection.find_one(
         {"meeting_id": meeting_id}
+    )
+
+    saved_participant = next(
+        (
+            item for item in updated_meeting.get("participants", [])
+            if str(item.get("user_id", "")) == normalized_user_id
+        ),
+        {},
+    )
+    logger.info(
+        "MongoDB participant after save -> user_id=%s preferred_language=%s "
+        "source_language=%s",
+        user_id,
+        saved_participant.get("preferred_language"),
+        saved_participant.get("source_language"),
     )
 
     print("Participants After Join:")
@@ -199,8 +297,10 @@ async def leave_meeting(
 
     participant_count = len(updated_meeting["participants"])
 
-    # If 0 or 1 participants remain, end the meeting
-    if participant_count <= 1:
+    # Leaving is distinct from ending a meeting. A remaining participant may
+    # still be waiting for others to join, so only an empty meeting is closed
+    # here; the host uses the explicit end endpoint to finish it for everyone.
+    if participant_count == 0:
 
         await meetings_collection.update_one(
             {
@@ -323,24 +423,96 @@ async def get_participants(
     }
 
 
+async def get_meeting_history(meeting_id: str, user_id: str):
+    """Return only conversation records the current meeting participant may see."""
+    meeting = await meetings_collection.find_one(
+        {"meeting_id": meeting_id}, {"_id": 0, "participants.user_id": 1}
+    )
+    if not meeting:
+        return {"success": False, "message": "Meeting not found."}
+
+    participant_ids = {str(item.get("user_id")) for item in meeting.get("participants", [])}
+    if str(user_id) not in participant_ids:
+        return {"success": False, "message": "You are not a participant in this meeting."}
+
+    transcripts = await transcripts_collection.find(
+        {"meeting_id": meeting_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(length=None)
+    translations = await translations_collection.find(
+        {"meeting_id": meeting_id, "recipient_id": str(user_id)}, {"_id": 0}
+    ).sort("created_at", 1).to_list(length=None)
+    chat_records = await chat_messages_collection.find(
+        {"meeting_id": meeting_id, "$or": [
+            {"sender_id": str(user_id)},
+            {"recipient_ids": str(user_id)},
+        ]}, {"_id": 0}
+    ).sort("timestamp", 1).to_list(length=None)
+
+    chats = []
+    for record in chat_records:
+        delivery = next(
+            (item for item in record.get("deliveries", [])
+             if str(item.get("recipient_id")) == str(user_id)),
+            None,
+        )
+        chats.append({
+            "type": "chat",
+            "meeting_id": meeting_id,
+            "message_id": record.get("message_id"),
+            "user_id": record.get("sender_id"),
+            "sender_id": record.get("sender_id"),
+            "name": record.get("sender_name", "Participant"),
+            "user_name": record.get("sender_name", "Participant"),
+            "recipient_id": str(user_id),
+            "source_language": record.get("source_language"),
+            "original_text": record.get("original_text", ""),
+            "text": (delivery or {}).get("text") or record.get("original_text", ""),
+            "translated_text": (delivery or {}).get("text"),
+            "is_translated": bool((delivery or {}).get("is_translated")),
+            "time": record.get("timestamp", ""),
+        })
+
+    return {
+        "success": True,
+        "transcripts": transcripts,
+        "translations": translations,
+        "chat_messages": chats,
+    }
+
+
 # ==========================================
 # GET ACTIVE MEETING
 # ==========================================
 
 async def get_active_meeting(user_id: str):
 
-    meeting = await meetings_collection.find_one(
-        {
-            "status": "active",
-            "$or": [
-                {"host_id": user_id},
-                {"participants.user_id": user_id}
-            ]
-        },
-        {
-            "_id": 0
-        }
-    )
+    normalized_user_id = str(user_id)
+    meeting = None
+    cursor = meetings_collection.find({"status": "active"}, {"_id": 0})
+
+    async for candidate in cursor:
+        host_id = str(candidate.get("host_id", ""))
+        participant_ids = [
+            str(participant.get("user_id", ""))
+            for participant in candidate.get("participants", [])
+        ]
+        is_participant = normalized_user_id in participant_ids
+        print("========== ACTIVE MEETING CHECK ==========")
+        print({
+            "current_user_id": normalized_user_id,
+            "meeting_id": candidate.get("meeting_id"),
+            "host_id": host_id,
+            "participants": participant_ids,
+            "is_host": host_id == normalized_user_id,
+            "is_participant": is_participant,
+            "result": is_participant,
+        })
+        # A host is initially a participant too. Requiring present
+        # membership prevents an old active record from resurfacing after
+        # that host has left a multi-party meeting.
+        if is_participant:
+            meeting = candidate
+            break
 
     if meeting is None:
         return {
@@ -402,7 +574,9 @@ async def get_active_meeting(user_id: str):
             "participants": len(meeting["participants"]),
             "participant_list": meeting["participants"],
             "status": meeting["status"],
-            "source_language": meeting.get("source_language", "Detecting..."),
+            "source_language": meeting.get("source_language") or _source_language_code(
+                meeting.get("preferred_language", "")
+            ),
             "preferred_language": meeting.get(
                 "preferred_language",
                 meeting.get("target_language", "English")

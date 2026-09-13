@@ -1,0 +1,281 @@
+import gc
+import io
+import os
+import wave
+from threading import Lock
+
+import numpy as np
+import requests
+from dotenv import load_dotenv
+
+from faster_whisper import WhisperModel
+
+# Ensure DEEPGRAM_API_KEY (and any other .env values) are available even if
+# this module happens to be imported before app.config.settings triggers its
+# own load_dotenv() call elsewhere in the app. python-dotenv's load_dotenv()
+# is safe to call more than once.
+load_dotenv()
+
+DEEPGRAM_API_URL = "https://api.deepgram.com/v1/listen"
+DEEPGRAM_MODEL = "nova-3"
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+DEEPGRAM_TIMEOUT_SECONDS = 20
+
+
+class WhisperService:
+
+    def __init__(self):
+
+        # This singleton backs the existing file-upload transcription
+        # endpoint (app/services/speech_to_text_service.py), which calls
+        # get_model() directly and drives faster-whisper's own
+        # transcribe() API. That endpoint is intentionally left unchanged
+        # by the Deepgram migration below -- only this class's transcribe()
+        # method (used by the realtime meeting/WebSocket pipeline) now
+        # calls the Deepgram API instead of this local model.
+        self._model = None
+        self._model_lock = Lock()
+
+    def get_model(self):
+        """Return the shared faster-whisper model, loading it on first use.
+
+        Unchanged. Still backs app/services/speech_to_text_service.py and
+        the startup warm-up in app/main.py.
+        """
+
+        if self._model is None:
+            with self._model_lock:
+                if self._model is None:
+                    print("Loading Whisper model: base (device=cpu, compute_type=int8)")
+                    self._model = WhisperModel(
+                        "base",
+                        device="cpu",
+                        compute_type="int8"
+                    )
+
+        return self._model
+
+    # ==================================================================
+    # Deepgram-backed realtime transcription
+    # ==================================================================
+
+    @staticmethod
+    def _pcm_float32_to_wav_bytes(samples: np.ndarray, sample_rate: int = 16000) -> bytes:
+        """Encode mono float32 PCM in [-1, 1] into an in-memory WAV file.
+
+        No temporary file is created -- the WAV container is built directly
+        in memory and sent to Deepgram as the request body.
+        """
+
+        pcm16 = np.clip(samples, -1.0, 1.0)
+        pcm16 = (pcm16 * 32767.0).astype("<i2", copy=False)
+
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(pcm16.tobytes())
+
+        return buffer.getvalue()
+
+    def transcribe(self, audio, vad_filter=True, language: str = ""):
+        """
+        Transcribe audio using the Deepgram REST API (model="nova-3").
+
+        Public interface, accepted inputs, and the returned dictionary
+        shape are unchanged from the previous faster-whisper-backed
+        implementation, so every existing caller (meeting_socket.py,
+        confidence_service.py, speech_accuracy_service.py, the evaluation
+        script, etc.) keeps working without knowing the transcription
+        engine changed.
+
+        `vad_filter` is accepted for backward compatibility. Deepgram's
+        prerecorded /v1/listen endpoint does not take an equivalent
+        parameter for a single already-validated chunk, so it is accepted
+        but not sent to the API.
+        """
+
+        # Live meeting callers must supply the participant's selected
+        # language. Refuse a missing value rather than guessing.
+        if not isinstance(language, str) or not language.strip():
+            return {
+                "success": False,
+                "reason": "missing_configured_language",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
+
+        language = language.strip()
+
+        if audio is None or (hasattr(audio, "size") and audio.size == 0) or (
+            isinstance(audio, (bytes, bytearray)) and not audio
+        ):
+            return {
+                "success": False,
+                "reason": "empty_audio",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
+
+        if not DEEPGRAM_API_KEY:
+            print("[DEEPGRAM-ERROR] DEEPGRAM_API_KEY is not set")
+            return {
+                "success": False,
+                "reason": "missing_deepgram_api_key",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
+
+        audio_bytes = None
+
+        try:
+
+            # The meeting pipeline supplies validated mono float32 PCM at
+            # 16 kHz; wrap it in an in-memory WAV container. Other existing
+            # callers may still pass raw WebM bytes -- those are sent to
+            # Deepgram as-is with the matching content type, with no
+            # intermediate decode or temp file needed either way.
+            if isinstance(audio, (bytes, bytearray)):
+                audio_bytes = bytes(audio)
+                content_type = "audio/webm"
+            else:
+                samples = np.ascontiguousarray(
+                    np.nan_to_num(
+                        np.asarray(audio, dtype=np.float32),
+                        nan=0.0,
+                        posinf=0.0,
+                        neginf=0.0,
+                    ).reshape(-1)
+                )
+                audio_bytes = self._pcm_float32_to_wav_bytes(samples)
+                content_type = "audio/wav"
+
+            params = {
+                "model": DEEPGRAM_MODEL,
+                "language": language,
+                "punctuate": "true",
+                "smart_format": "true",
+            }
+
+            headers = {
+                "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                "Content-Type": content_type,
+            }
+
+            print(
+                f"[DEEPGRAM-CALL] model={DEEPGRAM_MODEL} language={language} "
+                f"bytes={len(audio_bytes)} content_type={content_type}"
+            )
+
+            try:
+                response = requests.post(
+                    DEEPGRAM_API_URL,
+                    params=params,
+                    headers=headers,
+                    data=audio_bytes,
+                    timeout=DEEPGRAM_TIMEOUT_SECONDS,
+                )
+                response.raise_for_status()
+                payload = response.json()
+            except requests.exceptions.RequestException as error:
+                print(f"[DEEPGRAM-ERROR] request failed: {error}")
+                return {
+                    "success": False,
+                    "reason": f"deepgram_error: {error}",
+                    "language": None,
+                    "text": "",
+                    "confidence": 0,
+                    "segments": [],
+                }
+
+            try:
+                channels = payload.get("results", {}).get("channels", [])
+                alternatives = channels[0].get("alternatives", []) if channels else []
+                best = alternatives[0] if alternatives else {}
+
+                transcript = (best.get("transcript") or "").strip()
+
+                # Deepgram returns confidence as a 0.0-1.0 float. Existing
+                # downstream code (confidence_service.py,
+                # speech_accuracy_service.py) expects a 0-100 percentage,
+                # matching the scale the previous avg_logprob-based
+                # Whisper confidence used.
+                raw_confidence = best.get("confidence", 0.0) or 0.0
+                confidence = round(min(max(raw_confidence * 100, 0), 100), 2)
+
+                words = best.get("words", [])
+                if words:
+                    segment_start = words[0].get("start", 0.0)
+                    segment_end = words[-1].get("end", 0.0)
+                else:
+                    segment_start = 0.0
+                    segment_end = 0.0
+
+                # Deepgram has no per-segment avg_logprob / no_speech_prob /
+                # compression_ratio equivalent (those are Whisper-decoder
+                # specific). Downstream code only ever reads those via
+                # dict.get(...) for optional debug logging, so omitting
+                # them is safe and matches the dictionary shape the rest
+                # of the application expects.
+                segments = [{
+                    "start": segment_start,
+                    "end": segment_end,
+                    "text": transcript,
+                    "confidence": confidence,
+                }] if transcript else []
+
+            except (KeyError, IndexError, ValueError, TypeError, AttributeError) as error:
+                print(f"[DEEPGRAM-ERROR] unexpected response shape: {error}")
+                return {
+                    "success": False,
+                    "reason": f"deepgram_response_error: {error}",
+                    "language": None,
+                    "text": "",
+                    "confidence": 0,
+                    "segments": [],
+                }
+
+            print(
+                f"[DEEPGRAM-RESULT] language={language} transcript={transcript!r} "
+                f"confidence={confidence}"
+            )
+
+            return {
+                "success": True,
+                "language": language,
+                "text": transcript,
+                "confidence": confidence,
+                "segments": segments,
+            }
+
+        except Exception as error:
+            # Never let an unexpected error crash the WebSocket worker --
+            # match the previous behavior of always returning the
+            # established failure dictionary shape.
+            print(f"[DEEPGRAM-ERROR] unhandled error: {error}")
+            return {
+                "success": False,
+                "reason": f"deepgram_error: {error}",
+                "language": None,
+                "text": "",
+                "confidence": 0,
+                "segments": [],
+            }
+
+        finally:
+
+            try:
+                del audio_bytes
+            except UnboundLocalError:
+                pass
+            gc.collect()
+
+
+whisper_service = WhisperService()

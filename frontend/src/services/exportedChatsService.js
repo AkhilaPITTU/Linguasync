@@ -1,40 +1,20 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000"
+    baseURL: API_BASE_URL
 });
 
 export const getExportedChats = async () => {
+    const token = localStorage.getItem("access_token");
+    const response = await API.get("/dashboard/chat-history", {
+        headers: { Authorization: `Bearer ${token}` },
+    });
 
-    try {
-
-        const token = localStorage.getItem("access_token");
-
-        const response = await API.get(
-            "/dashboard/exported-chats",
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            }
-        );
-
-        if (response.data.success) {
-
-            return response.data.data;
-
-        }
-
-        return [];
-
+    if (!response.data?.success || !Array.isArray(response.data.data)) {
+        throw new Error(response.data?.message || "Unable to load chat history.");
     }
 
-    catch (error) {
-
-        console.error("Exported Chats Error:", error);
-
-        return [];
-
-    }
+    return response.data.data;
 
 };

@@ -111,3 +111,30 @@
 
     border-radius:20px;
 }
+
+.transcript-edit-button,
+.transcript-edit button{
+    margin-top:8px;
+    margin-right:8px;
+    border:0;
+    border-radius:7px;
+    padding:6px 10px;
+    color:#fff;
+    background:#6C4DFF;
+    cursor:pointer;
+}
+
+.transcript-edit textarea{
+    width:100%;
+    min-height:76px;
+    box-sizing:border-box;
+    color:#fff;
+    background:#111827;
+    border:1px solid #6C4DFF;
+    border-radius:8px;
+    padding:8px;
+}
+
+.transcript-edited{
+    color:#aeb7ca;
+}

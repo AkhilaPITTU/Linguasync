@@ -158,3 +158,9 @@
 
     border-radius:10px;
 }
+
+.chat-send-error{
+    color:#fca5a5;
+    font-size:12px;
+    margin:0 0 8px;
+}

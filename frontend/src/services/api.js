@@ -1,7 +1,8 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const api = axios.create({
-    baseURL: "http://127.0.0.1:8000/api",
+    baseURL: `${API_BASE_URL}/api`,
     headers: {
         "Content-Type": "application/json",
     },
@@ -20,6 +21,20 @@ api.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem("access_token");
+            const currentPath = `${window.location.pathname}${window.location.search}`;
+            if (window.location.pathname !== "/login") {
+                window.location.assign(`/login?returnTo=${encodeURIComponent(currentPath)}`);
+            }
+        }
+        return Promise.reject(error);
+    }
 );
 
 export default api;

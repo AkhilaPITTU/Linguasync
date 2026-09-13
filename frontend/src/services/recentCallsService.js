@@ -1,36 +1,19 @@
 import axios from "axios";
+import { API_BASE_URL } from "./apiConfig";
 
 const API = axios.create({
-    baseURL: "http://127.0.0.1:8000"
+    baseURL: API_BASE_URL
 });
 
 export const getRecentCalls = async () => {
+    const token = localStorage.getItem("access_token");
+    const response = await API.get("/dashboard/recent-calls", {
+        headers: { Authorization: `Bearer ${token}` },
+    });
 
-    try {
-
-        const token = localStorage.getItem("access_token");
-
-        const response = await API.get(
-            "/dashboard/recent-calls",
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            }
-        );
-
-        if (response.data.success) {
-            return response.data.data;
-        }
-
-        return [];
-
-    } catch (error) {
-
-        console.error("Error fetching recent calls:", error);
-
-        return [];
-
+    if (!response.data?.success || !Array.isArray(response.data.data)) {
+        throw new Error(response.data?.message || "Unable to load call history.");
     }
 
+    return response.data.data;
 };

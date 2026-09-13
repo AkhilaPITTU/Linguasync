@@ -4,7 +4,7 @@ import re
 class GrammarCorrectionService:
     """
     Performs lightweight grammar and formatting cleanup
-    on Whisper transcripts.
+    on speech-recognition transcripts.
     """
 
     def correct(self, text: str):

@@ -6,6 +6,7 @@ import {
   FaShieldAlt,
   FaBrain,
 } from "react-icons/fa";
+import { Link } from "react-router-dom";
 
 import "./Hero.css";
 
@@ -42,14 +43,14 @@ function Hero() {
 
         <div className="hero-buttons">
 
-          <button className="primary-btn">
-            Explore Project
+          <Link to="/register" className="primary-btn">
+            Get Started
             <FaArrowRight />
-          </button>
+          </Link>
 
-          <button className="secondary-btn">
-            View Architecture
-          </button>
+          <Link to="/login" className="secondary-btn">
+            Log in
+          </Link>
 
         </div>
 

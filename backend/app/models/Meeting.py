@@ -16,6 +16,12 @@ class Participant(BaseModel):
 
     language: str
 
+    preferred_language: str = "English"
+
+    source_language: str
+
+    output_mode: str = "none"
+
     mic_enabled: bool = True
 
     camera_enabled: bool = True
@@ -42,11 +48,13 @@ class Meeting(BaseModel):
     status: Literal["active", "completed", "cancelled"]
 
     # Translation Information
-    source_language: str = "Detecting..."
+    source_language: str
 
     preferred_language: str
 
     output_mode: Literal[
+        "none",
+        "subtitle",
         "original",
         "text",
         "speech",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Popup from "../components/Popup";
 import api from "../services/api";
 
@@ -10,8 +10,6 @@ function ForgotPassword() {
   const [showPopup, setShowPopup] = useState(false);
 
   const [loading, setLoading] = useState(false);
-
-  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
 

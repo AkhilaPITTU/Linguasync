@@ -1,21 +1,41 @@
 import "./RecentCalls.css";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getRecentCalls } from "../../services/recentCallsService";
 
 import {
-    FiPhone,
+    FiPhoneIncoming,
+    FiPhoneOutgoing,
     FiVideo,
     FiMic,
-    FiClock,
-    FiFileText,
-    FiPlay
+    FiClock
 } from "react-icons/fi";
+
+// Every field rendered below (caller, receiver, direction, mode, status,
+// duration, date, time) now comes directly from the Call History backend
+// response (see backend/app/services/call_history_service.py) -- derived
+// there from real stored ids (meeting.host_id, participants[].user_id,
+// invitations.invited_user_id/status), never guessed or inferred here.
+// There is no client-side name comparison and no "You" placeholder.
+
+const STATUS_CLASS = {
+    Completed: "is-completed",
+    Ongoing: "is-ongoing",
+    Missed: "is-missed",
+    Rejected: "is-rejected",
+    Cancelled: "is-cancelled",
+};
+
+function statusClassName(status) {
+    return STATUS_CLASS[status] || "is-completed";
+}
 
 function RecentCalls() {
 
     const [calls, setCalls] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
 
@@ -32,6 +52,9 @@ function RecentCalls() {
             catch (error) {
 
                 console.error("Recent Calls Error:", error);
+                setError(error.message || "Unable to load call history.");
+            } finally {
+                setLoading(false);
 
             }
 
@@ -41,135 +64,112 @@ function RecentCalls() {
 
     }, []);
 
+    const entries = useMemo(() => calls, [calls]);
+
     return (
 
-        <div className="dashboard-card recent-calls">
+        <div className="dashboard-card call-log">
 
             <div className="card-header">
 
                 <h2>
-
-                    Recent Calls
-
+                    Call History
                 </h2>
 
                 <span>
-
-                    View All
-
+                    {entries.length} {entries.length === 1 ? "call" : "calls"}
                 </span>
 
             </div>
 
-            {
+            {loading ? (
+                <p className="dashboard-state">Loading call history…</p>
+            ) : error ? (
+                <p className="dashboard-state error">{error}</p>
+            ) : entries.length === 0 ? (
+                <p className="dashboard-state">No previous calls found.</p>
+            ) : (
+                <ul className="call-log-list">
+                    {entries.map((entry) => {
 
-                calls.map((call) => (
+                        const isOutgoing = entry.direction === "Outgoing";
 
-                    <div
-                        className="call-card"
-                        key={call.id}
-                    >
+                        return (
+                            <li
+                                className={`call-log-row ${isOutgoing ? "is-outgoing" : "is-incoming"}`}
+                                key={entry.id}
+                            >
 
-                        <div className="call-left">
+                                <div
+                                    className={`call-direction-icon ${isOutgoing ? "is-outgoing" : "is-incoming"}`}
+                                    aria-hidden="true"
+                                >
+                                    {isOutgoing ? <FiPhoneOutgoing /> : <FiPhoneIncoming />}
+                                </div>
 
-                            <img
-                                src="/images/user.png"
-                                alt="User"
-                            />
+                                <div className="call-log-main">
 
-                            <div>
+                                    <span className={`call-type-badge ${isOutgoing ? "is-outgoing" : "is-incoming"}`}>
+                                        {entry.direction}
+                                    </span>
 
-                                <h3>
+                                    <dl className="call-log-details">
 
-                                    {call.name}
+                                        <div className="call-log-detail-row">
+                                            <dt>Caller</dt>
+                                            <dd>{entry.caller}</dd>
+                                        </div>
 
-                                </h3>
+                                        <div className="call-log-detail-row">
+                                            <dt>Receiver</dt>
+                                            <dd>{entry.receiver}</dd>
+                                        </div>
 
-                                <p>
+                                        <div className="call-log-detail-row">
+                                            <dt>Type</dt>
+                                            <dd className="call-mode">
+                                                {entry.mode === "Video" ? <FiVideo /> : <FiMic />}
+                                                {entry.mode === "Video" ? "Video Call" : "Audio Call"}
+                                            </dd>
+                                        </div>
 
-                                    {
+                                        <div className="call-log-detail-row">
+                                            <dt>Status</dt>
+                                            <dd>
+                                                <span className={`call-status-badge ${statusClassName(entry.status)}`}>
+                                                    {entry.status}
+                                                </span>
+                                            </dd>
+                                        </div>
 
-                                        call.mode === "Video"
+                                        <div className="call-log-detail-row">
+                                            <dt>Duration</dt>
+                                            <dd className="call-log-duration">
+                                                <FiClock />
+                                                {entry.duration}
+                                            </dd>
+                                        </div>
 
-                                            ?
+                                        <div className="call-log-detail-row">
+                                            <dt>Date</dt>
+                                            <dd>{entry.date}</dd>
+                                        </div>
 
-                                            <>
+                                        <div className="call-log-detail-row">
+                                            <dt>Time</dt>
+                                            <dd>{entry.time}</dd>
+                                        </div>
 
-                                                <FiVideo />
+                                    </dl>
 
-                                                Video Call
+                                </div>
 
-                                            </>
+                            </li>
+                        );
 
-                                            :
-
-                                            <>
-
-                                                <FiMic />
-
-                                                Audio Call
-
-                                            </>
-
-                                    }
-
-                                </p>
-
-                                <span>
-
-                                    {call.language}
-
-                                </span>
-
-                            </div>
-
-                        </div>
-
-                        <div className="call-right">
-
-                            <div className="call-time">
-
-                                <FiClock />
-
-                                {call.duration}
-
-                            </div>
-
-                            <small>
-
-                                {call.time}
-
-                            </small>
-
-                            <div className="call-buttons">
-
-                                <button>
-
-                                    <FiPlay />
-
-                                </button>
-
-                                <button>
-
-                                    <FiFileText />
-
-                                </button>
-
-                                <button>
-
-                                    <FiPhone />
-
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                ))
-
-            }
+                    })}
+                </ul>
+            )}
 
         </div>
 

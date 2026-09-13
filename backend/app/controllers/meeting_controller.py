@@ -14,6 +14,7 @@ from app.services.meeting_service import (
     leave_meeting,
     end_meeting,
     get_meeting,
+    get_meeting_history,
     get_participants,
     get_active_meeting,
 )
@@ -72,7 +73,9 @@ async def join_meeting_controller(
             meeting_id=data.meeting_id,
             user_id=user_id,
             user_name=data.user_name,
-            language=data.language
+            preferred_language=data.preferred_language,
+            source_language=data.source_language,
+            output_mode=data.output_mode,
         )
 
         if not result["success"]:
@@ -232,6 +235,20 @@ async def get_participants_controller(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+async def get_meeting_history_controller(meeting_id: str, authorization: str):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Authorization Header")
+    user_id = get_user_id(authorization.split(" ", 1)[1])
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or Expired Token")
+
+    result = await get_meeting_history(meeting_id, user_id)
+    if not result["success"]:
+        status_code = status.HTTP_404_NOT_FOUND if result["message"] == "Meeting not found." else status.HTTP_403_FORBIDDEN
+        raise HTTPException(status_code=status_code, detail=result["message"])
+    return result
 
 
 # ==========================================

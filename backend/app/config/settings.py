@@ -4,6 +4,20 @@ import os
 load_dotenv()
 
 
+def _parse_allowed_origins(raw_value, fallback):
+
+    origins = [
+        origin.strip()
+        for origin in raw_value.split(",")
+        if origin.strip()
+    ]
+
+    if origins:
+        return origins
+
+    return [fallback] if fallback else []
+
+
 class Settings:
 
     # ==========================
@@ -27,10 +41,31 @@ class Settings:
     )
 
     # ==========================
+    # Server
+    # ==========================
+
+    HOST = os.getenv("HOST", "0.0.0.0")
+
+    PORT = int(os.getenv("PORT", "8000"))
+
+    # "development" or "production". Controls Uvicorn's auto-reload
+    # in run.py; everything else defaults exactly as before.
+    ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+    # ==========================
     # Frontend
     # ==========================
 
     FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+    # Comma-separated list of allowed CORS origins for production
+    # frontend domain(s), e.g. "https://app.example.com,https://example.com".
+    # Falls back to FRONTEND_URL alone when unset, so local dev and the
+    # existing LAN allow_origin_regex below are unaffected.
+    ALLOWED_ORIGINS = _parse_allowed_origins(
+        os.getenv("ALLOWED_ORIGINS", ""),
+        FRONTEND_URL,
+    )
 
     # ==========================
     # Mail
@@ -63,10 +98,18 @@ class Settings:
         "uploads"
     )
 
+    PROFILE_IMAGE_FOLDER = os.getenv(
+        "PROFILE_IMAGE_FOLDER",
+        "profile_images"
+    )
+
+    # Root folder conversation/transcript exports are written under (already
+    # present in .env.example; previously unused by any Settings attribute).
+    # The conversation PDF export feature writes signed PDFs to
+    # "<TRANSCRIPT_EXPORT_FOLDER>/signed/".
     TRANSCRIPT_EXPORT_FOLDER = os.getenv(
         "TRANSCRIPT_EXPORT_FOLDER",
         "transcript_exports"
     )
-
 
 settings = Settings()

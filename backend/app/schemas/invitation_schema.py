@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Literal
 
 
 class SendInvitationSchema(BaseModel):
@@ -9,3 +9,10 @@ class SendInvitationSchema(BaseModel):
 
 class RespondInvitationSchema(BaseModel):
     invitation_id: str
+
+
+class AcceptInvitationSchema(BaseModel):
+    preferred_language: str
+    # Translated voice/TTS has been removed entirely: only "none" and
+    # "subtitle" (text-only) are valid recipient output modes.
+    output_mode: Literal["none", "subtitle"]

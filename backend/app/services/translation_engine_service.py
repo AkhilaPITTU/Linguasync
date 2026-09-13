@@ -30,7 +30,7 @@ async def translation_engine_service():
 
             "model": "Transformer (MarianMT)",
 
-            "speech_to_text": "Faster Whisper",
+            "speech_to_text": "Deepgram Nova-3",
 
             "translation": "Running",
 

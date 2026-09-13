@@ -114,34 +114,6 @@ EXPORTED CHATS
 
 /* ========================================== */
 
-.export-card button{
-
-    width:46px;
-
-    height:46px;
-
-    border:none;
-
-    border-radius:14px;
-
-    background:#2563EB;
-
-    color:white;
-
-    cursor:pointer;
-
-    transition:.3s;
-
-    font-size:18px;
-
-}
-
-.export-card button:hover{
-
-    background:#7C3AED;
-
-}
-
 /* ========================================== */
 
 @media(max-width:768px){
@@ -156,10 +128,18 @@ gap:18px;
 
 }
 
-.export-card button{
-
-width:100%;
-
 }
 
+.dashboard-state{
+    margin:18px 0 0;
+    color:#94A3B8;
+}
+
+.dashboard-state.error{
+    color:#fca5a5;
+}
+
+.chat-history-text{
+    max-width:560px;
+    overflow-wrap:anywhere;
 }
