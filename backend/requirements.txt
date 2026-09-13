@@ -1,5 +1,9 @@
 # Python 3.11 / Render runtime dependencies for LINGUASYNC.
-# Translation uses the public MyMemory REST API; no local model is retained.
+# Translation uses Google Translate's free web endpoint (via deep-translator,
+# no API key); no local model is retained. Previously used the public
+# MyMemory REST API, replaced because MyMemory's free tier aggressively
+# rate-limits/blocks shared cloud IPs (such as Render's), which silently
+# returned untranslated text as a false "success".
 
 # Web application and persistence
 fastapi==0.140.0
@@ -20,6 +24,7 @@ av==18.0.0
 
 # Translation API client
 requests==2.34.2
+deep-translator==1.11.4
 
 # Existing application features
 edge-tts==7.2.8

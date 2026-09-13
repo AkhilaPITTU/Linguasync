@@ -736,9 +736,10 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
             )
             # Diagnostics only -- the fallback result below is unchanged.
             # Makes clear in Render logs that this recipient never reached
-            # MyMemory at all: their stored preferred_language could not be
-            # resolved to a supported code, as distinct from a MyMemory
-            # call that was attempted and failed.
+            # the translation provider (Google Translate) at all: their
+            # stored preferred_language could not be resolved to a
+            # supported code, as distinct from a provider call that was
+            # attempted and failed.
             print(
                 f"Unsupported recipient language: {language}\n"
                 f"Resolved language code: {target_code!r}"
