@@ -1,8 +1,8 @@
 /* ==========================================
-RECENT CALLS
+CALL HISTORY (phone call log)
 ========================================== */
 
-.recent-calls{
+.call-log{
 
     width:100%;
 
@@ -10,13 +10,21 @@ RECENT CALLS
 
 /* ========================================== */
 
-.call-card{
+.call-log-list{
+
+    list-style:none;
+    margin:0;
+    padding:0;
+
+}
+
+.call-log-row{
 
     display:flex;
 
-    justify-content:space-between;
+    align-items:flex-start;
 
-    align-items:center;
+    gap:16px;
 
     background:#18253D;
 
@@ -24,13 +32,13 @@ RECENT CALLS
 
     padding:18px;
 
-    margin-bottom:18px;
+    margin-bottom:14px;
 
     transition:.35s;
 
 }
 
-.call-card:hover{
+.call-log-row:hover{
 
     transform:translateY(-5px);
 
@@ -40,77 +48,143 @@ RECENT CALLS
 
 /* ========================================== */
 
-.call-left{
+.call-direction-icon{
+
+    flex-shrink:0;
 
     display:flex;
 
-    gap:15px;
-
     align-items:center;
 
-}
+    justify-content:center;
 
-.call-left img{
+    width:48px;
 
-    width:60px;
-
-    height:60px;
+    height:48px;
 
     border-radius:50%;
 
-    border:2px solid #7C3AED;
+    font-size:20px;
+
+}
+
+.call-direction-icon.is-incoming{
+
+    background:rgba(16,185,129,.15);
+
+    color:#34D399;
+
+}
+
+.call-direction-icon.is-outgoing{
+
+    background:rgba(124,58,237,.15);
+
+    color:#A78BFA;
 
 }
 
 /* ========================================== */
 
-.call-left h3{
+.call-log-main{
 
-    color:white;
+    flex:1;
 
-    margin-bottom:6px;
-
-}
-
-.call-left p{
-
-    display:flex;
-
-    align-items:center;
-
-    gap:8px;
-
-    color:#06B6D4;
-
-    font-size:14px;
-
-    margin-bottom:5px;
+    min-width:0;
 
 }
 
-.call-left span{
+.call-type-badge{
+
+    display:inline-block;
+
+    font-size:11px;
+
+    font-weight:600;
+
+    text-transform:uppercase;
+
+    letter-spacing:.04em;
+
+    padding:3px 9px;
+
+    border-radius:999px;
+
+    margin-bottom:10px;
+
+}
+
+.call-type-badge.is-incoming{
+
+    background:rgba(16,185,129,.15);
+
+    color:#34D399;
+
+}
+
+.call-type-badge.is-outgoing{
+
+    background:rgba(124,58,237,.18);
+
+    color:#A78BFA;
+
+}
+
+/* ========================================== */
+
+.call-log-details{
+
+    display:grid;
+
+    grid-template-columns:auto 1fr;
+
+    row-gap:8px;
+
+    column-gap:14px;
+
+    margin:0;
+
+}
+
+.call-log-detail-row{
+
+    display:contents;
+
+}
+
+.call-log-details dt{
 
     color:#94A3B8;
 
     font-size:13px;
 
+    font-weight:500;
+
 }
 
-/* ========================================== */
+.call-log-details dd{
 
-.call-right{
+    margin:0;
+
+    color:white;
+
+    font-size:14px;
+
+}
+
+.call-mode{
 
     display:flex;
 
-    flex-direction:column;
+    align-items:center;
 
-    align-items:flex-end;
+    gap:6px;
 
-    gap:10px;
+    color:#06B6D4;
 
 }
 
-.call-time{
+.call-log-duration{
 
     display:flex;
 
@@ -118,11 +192,59 @@ RECENT CALLS
 
     gap:8px;
 
-    color:white;
+}
+
+/* ========================================== */
+
+.call-status-badge{
+
+    display:inline-block;
+
+    font-size:11px;
+
+    font-weight:600;
+
+    padding:3px 10px;
+
+    border-radius:999px;
 
 }
 
-.call-right small{
+.call-status-badge.is-completed{
+
+    background:rgba(148,163,184,.15);
+
+    color:#CBD5E1;
+
+}
+
+.call-status-badge.is-ongoing{
+
+    background:rgba(245,158,11,.15);
+
+    color:#FBBF24;
+
+}
+
+.call-status-badge.is-missed{
+
+    background:rgba(239,68,68,.15);
+
+    color:#F87171;
+
+}
+
+.call-status-badge.is-rejected{
+
+    background:rgba(239,68,68,.15);
+
+    color:#F87171;
+
+}
+
+.call-status-badge.is-cancelled{
+
+    background:rgba(148,163,184,.15);
 
     color:#94A3B8;
 
@@ -130,27 +252,21 @@ RECENT CALLS
 
 /* ========================================== */
 
-/* ========================================== */
-
 @media(max-width:768px){
 
-.call-card{
+    .call-log-row{
 
-flex-direction:column;
+        flex-wrap:wrap;
 
-align-items:flex-start;
+    }
 
-gap:18px;
+    .call-log-details{
 
-}
+        grid-template-columns:auto 1fr;
 
-.call-right{
+        width:100%;
 
-align-items:flex-start;
-
-width:100%;
-
-}
+    }
 
 }
 

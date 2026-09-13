@@ -1,6 +1,6 @@
 import "./DashboardOverview.css";
 
-import { FiArrowUpRight, FiClock, FiFileText, FiGlobe, FiPhone, FiUser } from "react-icons/fi";
+import { FiArrowUpRight, FiClock, FiPhone, FiUser } from "react-icons/fi";
 import { Link } from "react-router-dom";
 
 const overviewLinks = [
@@ -10,20 +10,6 @@ const overviewLinks = [
     action: "View call history",
     path: "/call-history",
     icon: FiClock,
-  },
-  {
-    title: "Translation history",
-    description: "Find your recent multilingual conversation records.",
-    action: "View translation history",
-    path: "/translation-history",
-    icon: FiGlobe,
-  },
-  {
-    title: "Chat history",
-    description: "Review saved meeting chat messages.",
-    action: "View chat history",
-    path: "/chat-history",
-    icon: FiFileText,
   },
   {
     title: "Profile & preferences",

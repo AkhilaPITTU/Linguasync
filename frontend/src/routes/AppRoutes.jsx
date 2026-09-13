@@ -15,8 +15,6 @@ import CreateMeeting from "../pages/CreateMeeting";
 import MeetingRoom from "../pages/MeetingRoom";
 import AddParticipants from "../pages/AddParticipants";
 import RecentCallsPage from "../pages/RecentCallsPage";
-import TranslationHistoryPage from "../pages/TranslationHistoryPage";
-import ExportedChatsPage from "../pages/ExportedChatsPage";
 import ProfileOverviewPage from "../pages/ProfileOverviewPage";
 import VerifyPdfPage from "../pages/VerifyPdfPage";
 import IncomingInvitationPopup from "../components/invitations/IncomingInvitationPopup";
@@ -100,24 +98,6 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <RecentCallsPage />
-                    </ProtectedRoute>
-                }
-            />
-
-            <Route
-                path="/translation-history"
-                element={
-                    <ProtectedRoute>
-                        <TranslationHistoryPage />
-                    </ProtectedRoute>
-                }
-            />
-
-            <Route
-                path="/chat-history"
-                element={
-                    <ProtectedRoute>
-                        <ExportedChatsPage />
                     </ProtectedRoute>
                 }
             />

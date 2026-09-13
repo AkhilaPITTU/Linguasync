@@ -3,8 +3,6 @@ import "./Sidebar.css";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   FiClock,
-  FiFileText,
-  FiGlobe,
   FiGrid,
   FiLogOut,
   FiPhone,
@@ -29,8 +27,6 @@ function Sidebar() {
     { title: "Dashboard", icon: <FiGrid />, path: "/dashboard" },
     { title: "Start Call", icon: <FiPhone />, path: "/create-meeting" },
     { title: "Call History", icon: <FiClock />, path: "/call-history" },
-    { title: "Translation History", icon: <FiGlobe />, path: "/translation-history" },
-    { title: "Chat History", icon: <FiFileText />, path: "/chat-history" },
     { title: "Verify PDF", icon: <FiShield />, path: "/verify-pdf" },
     { title: "Profile", icon: <FiUser />, path: "/profile" },
   ];
