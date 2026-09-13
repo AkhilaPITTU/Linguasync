@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createMeeting } from "../services/meetingService";
 import { showToast } from "../components/notification/toastService";
 import "./CreateMeeting.css";
+import { SUPPORTED_LANGUAGES } from "../constants/languages";
 
 function CreateMeeting() {
 
@@ -193,18 +194,9 @@ function CreateMeeting() {
                         }
                     >
 
-                        <option>English</option>
-                        <option>Telugu</option>
-                        <option>Hindi</option>
-                        <option>Tamil</option>
-                        <option>Kannada</option>
-                        <option>Malayalam</option>
-                        <option>Bengali</option>
-                        <option>Marathi</option>
-                        <option>Gujarati</option>
-                        <option>Punjabi</option>
-                        <option>Urdu</option>
-                        <option>Odia</option>
+                        {SUPPORTED_LANGUAGES.map(({ name }) => (
+                            <option key={name} value={name}>{name}</option>
+                        ))}
 
                     </select>
 

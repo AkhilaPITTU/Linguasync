@@ -1,27 +1,13 @@
 import { useState } from "react";
 import "./LanguageSettings.css";
 import { getLanguageCode } from "./languageCode";
+import { SUPPORTED_LANGUAGES } from "../../constants/languages";
 import { showToast } from "../notification/toastService";
 
 // Matches backend/app/ai/translation_service.py's LANGUAGE_CONFIG exactly --
 // these are the only languages the translation engine can actually
 // translate. Offering any language not in that list here silently breaks
 // recipient-specific subtitle translation for that participant.
-const languages = [
-    "English",
-    "Telugu",
-    "Hindi",
-    "Tamil",
-    "Kannada",
-    "Malayalam",
-    "Bengali",
-    "Marathi",
-    "Gujarati",
-    "Punjabi",
-    "Urdu",
-    "Odia",
-];
-
 const LanguageSettings = ({
     language = "English",
     outputMode = "none",
@@ -74,16 +60,16 @@ const LanguageSettings = ({
 
             <div className="setting-card">
 
-                <label>Preferred subtitle language</label>
+                <label>Selected language</label>
 
                 <select
                     value={preferredLanguage}
                     onChange={(e) => setPreferredLanguage(e.target.value)}
                 >
 
-                    {languages.map((lang) => (
-                        <option key={lang} value={lang}>
-                            {lang}
+                    {SUPPORTED_LANGUAGES.map(({ name }) => (
+                        <option key={name} value={name}>
+                            {name}
                         </option>
                     ))}
 

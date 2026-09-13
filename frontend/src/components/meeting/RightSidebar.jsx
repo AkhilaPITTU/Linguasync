@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import "./RightSidebar.css";
 
 import Participants from "./Participants";
 import TranscriptPanel from "./TranscriptPanel";
 import ChatPanel from "./ChatPanel";
 import LanguageSettings from "./LanguageSettings";
-import ExportPanel from "./ExportPanel";
 import { resolveSpeakerName } from "./speakerName";
 
 const RightSidebar = ({
@@ -21,10 +20,10 @@ const RightSidebar = ({
     onPreferencesSave = async () => {},
     currentUserId,
     onCorrectTranscript = () => {},
-    requestedTab,
+    activeTab = "participants",
+    onTabChange = () => {},
 }) => {
 
-    const [activeTab, setActiveTab] = useState("participants");
     const transcriptCountRef = useRef(transcript.length);
     const translationCountRef = useRef(translations.length);
 
@@ -33,32 +32,26 @@ const RightSidebar = ({
     useEffect(() => {
 
         if (transcript.length > transcriptCountRef.current) {
-            setActiveTab("transcript");
+            onTabChange("transcript");
         }
 
         transcriptCountRef.current = transcript.length;
 
-    }, [transcript.length]);
+    }, [transcript.length, onTabChange]);
 
     useEffect(() => {
 
         if (translations.length > translationCountRef.current) {
-            setActiveTab("translation");
+            onTabChange("translation");
         }
 
         translationCountRef.current = translations.length;
 
-    }, [translations.length]);
+    }, [translations.length, onTabChange]);
 
     const latestTranslations = translations.filter(
         (item) => typeof item.text === "string" && item.text.trim()
     );
-
-    useEffect(() => {
-        if (requestedTab) {
-            setActiveTab(requestedTab);
-        }
-    }, [requestedTab]);
 
     return (
 
@@ -68,44 +61,37 @@ const RightSidebar = ({
 
                 <button
                     className={activeTab === "participants" ? "active" : ""}
-                    onClick={() => setActiveTab("participants")}
+                    onClick={() => onTabChange("participants")}
                 >
                     Participants
                 </button>
 
                 <button
                     className={activeTab === "transcript" ? "active" : ""}
-                    onClick={() => setActiveTab("transcript")}
+                    onClick={() => onTabChange("transcript")}
                 >
                     Transcript
                 </button>
 
                 <button
                     className={activeTab === "translation" ? "active" : ""}
-                    onClick={() => setActiveTab("translation")}
+                    onClick={() => onTabChange("translation")}
                 >
                     Translation
                 </button>
 
                 <button
                     className={activeTab === "chat" ? "active" : ""}
-                    onClick={() => setActiveTab("chat")}
+                    onClick={() => onTabChange("chat")}
                 >
                     Chat
                 </button>
 
                 <button
                     className={activeTab === "language" ? "active" : ""}
-                    onClick={() => setActiveTab("language")}
+                    onClick={() => onTabChange("language")}
                 >
                     Language
-                </button>
-
-                <button
-                    className={activeTab === "export" ? "active" : ""}
-                    onClick={() => setActiveTab("export")}
-                >
-                    Export
                 </button>
 
             </div>
@@ -152,7 +138,7 @@ const RightSidebar = ({
                                     <div className="live-translation-meta">
                                         <div className="live-translation-speaker">
                                             <strong>
-                                                {resolveSpeakerName(item, participants)}
+                                                {resolveSpeakerName(item, participants, currentUserId)}
                                             </strong>
                                             <span>
                                                 {item.target_language || "Translation"}
@@ -183,14 +169,6 @@ const RightSidebar = ({
                         setLanguage={setLanguage}
                         setSourceLanguage={setSourceLanguage}
                         onPreferencesSave={onPreferencesSave}
-                    />
-                )}
-
-                {activeTab === "export" && (
-                    <ExportPanel
-                        transcript={transcript}
-                        translations={translations}
-                        chatMessages={chatMessages}
                     />
                 )}
 

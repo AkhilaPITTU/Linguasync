@@ -5,6 +5,7 @@ import "@fontsource/noto-sans-telugu/400.css";
 import "@fontsource/noto-sans-devanagari/400.css";
 import { resolveSpeakerName } from "./speakerName";
 import { getLanguageCode } from "./languageCode";
+import { formatISTTime } from "../../utils/formatIST";
 
 const SCRIPT_FONT_FAMILY = '"Noto Sans Telugu", "Noto Sans Devanagari", "Noto Sans", sans-serif';
 
@@ -79,7 +80,7 @@ const TranscriptPanel = ({
 
                                         <strong>
 
-                                            {resolveSpeakerName(item, participants)}
+                                            {resolveSpeakerName(item, participants, currentUserId)}
 
                                         </strong>
 
@@ -87,7 +88,7 @@ const TranscriptPanel = ({
 
                                     <span className="time">
 
-                                        {item.time || ""}
+                                        {formatISTTime(item.time)}
 
                                     </span>
 

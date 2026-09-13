@@ -6,16 +6,16 @@ from app.controllers.exported_chats_controller import (
 
 router = APIRouter(
     prefix="/dashboard",
-    tags=["Exported Chats"]
+    tags=["Chat History"]
 )
 
 
 # ==========================================
-# GET EXPORTED CHATS
+# GET SAVED CHAT HISTORY
 # ==========================================
 
-@router.get("/exported-chats")
-async def exported_chats(
+@router.get("/chat-history")
+async def chat_history(
 
     authorization: str = Header(...)
 

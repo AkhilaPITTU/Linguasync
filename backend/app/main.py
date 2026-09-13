@@ -1,13 +1,12 @@
-import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from app.config.database import client
 from app.config.settings import settings
-from app.ai.whisper_service import whisper_service
 
 # ==========================================
 # ROUTERS
@@ -17,7 +16,6 @@ from app.routes.auth_routes import router as auth_router
 from app.routes.dashboard_routes import router as dashboard_router
 from app.routes.profile_routes import router as profile_router
 from app.routes.translation_routes import router as translation_router
-from app.routes.call_history_routes import router as call_history_router
 from app.routes.invitation_routes import router as invitation_router
 from app.routes.translation_history_routes import (
     router as translation_history_router
@@ -35,16 +33,11 @@ from app.routes.translation_engine_routes import (
     router as translation_engine_router
 )
 from app.routes.meeting_routes import router as meeting_router
-from app.routes.conversation_export_routes import router as conversation_export_router
-from app.routes.chat_export_routes import router as chat_export_router
-from app.routes.speech_to_text_routes import (
-    router as speech_router
+from app.routes.conversation_export_routes import (
+    router as conversation_export_router
 )
 from app.routes.text_to_speech_routes import (
     router as tts_router
-)
-from app.routes.realtime_translation_routes import (
-    router as realtime_router
 )
 
 # ==========================================
@@ -61,15 +54,6 @@ from app.websocket.meeting_socket import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    # Initialize one tiny/int8 Whisper singleton before accepting requests.
-    # If model download is unavailable, non-ASR features remain available and
-    # transcribe() continues to return its established error response.
-    try:
-        await asyncio.to_thread(whisper_service.get_model)
-        print("Whisper model ready")
-    except Exception as error:
-        print(f"Whisper model initialization failed: {type(error).__name__}: {error}")
 
     print("=" * 60)
     print("🚀 LINGUASYNC Backend Started")
@@ -101,10 +85,18 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+Path(settings.PROFILE_IMAGE_FOLDER).mkdir(parents=True, exist_ok=True)
+
 app.mount(
     "/generated_audio",
     StaticFiles(directory="generated_audio"),
     name="generated_audio",
+)
+
+app.mount(
+    "/profile-images",
+    StaticFiles(directory=settings.PROFILE_IMAGE_FOLDER, check_dir=False),
+    name="profile_images",
 )
 
 # ==========================================
@@ -118,7 +110,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
 )
 
 # ==========================================
@@ -131,8 +122,6 @@ routers = [
     dashboard_router,
     profile_router,
     translation_router,
-    call_history_router,
-
     # Invitation
     invitation_router,
 
@@ -142,11 +131,8 @@ routers = [
     system_status_router,
     translation_engine_router,
     meeting_router,
-    conversation_export_router,
-    chat_export_router,
-    speech_router,
     tts_router,
-    realtime_router,
+    conversation_export_router,
 
     # WebSocket
     websocket_router

@@ -33,7 +33,7 @@ class AudioService {
     // A single MediaRecorder running in timeslice mode only produces
     // one *complete*, independently-decodable file: the very first
     // chunk. Every chunk after that is a headerless continuation
-    // fragment, so handing each one to ffmpeg/Whisper on the backend
+    // fragment, so handing each one to the backend's decoder/Deepgram path
     // as if it were a standalone file fails for every chunk past the
     // first. To keep every chunk self-contained, we instead start a
     // brand new MediaRecorder on the same stream every interval,

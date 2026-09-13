@@ -1,7 +1,8 @@
 import {
     Routes,
     Route,
-    Navigate
+    Navigate,
+    useLocation
 } from "react-router-dom";
 
 import Landing from "../pages/Landing";
@@ -17,6 +18,7 @@ import RecentCallsPage from "../pages/RecentCallsPage";
 import TranslationHistoryPage from "../pages/TranslationHistoryPage";
 import ExportedChatsPage from "../pages/ExportedChatsPage";
 import ProfileOverviewPage from "../pages/ProfileOverviewPage";
+import VerifyPdfPage from "../pages/VerifyPdfPage";
 import IncomingInvitationPopup from "../components/invitations/IncomingInvitationPopup";
 
 
@@ -26,13 +28,15 @@ import IncomingInvitationPopup from "../components/invitations/IncomingInvitatio
 
 function ProtectedRoute({ children }) {
 
+    const location = useLocation();
+
     const token = localStorage.getItem(
         "access_token"
     );
 
     return token
         ? <><IncomingInvitationPopup />{children}</>
-        : <Navigate to="/login" replace />;
+        : <Navigate to="/login" replace state={{ from: location }} />;
 
 }
 
@@ -110,7 +114,7 @@ function AppRoutes() {
             />
 
             <Route
-                path="/exports"
+                path="/chat-history"
                 element={
                     <ProtectedRoute>
                         <ExportedChatsPage />
@@ -123,6 +127,15 @@ function AppRoutes() {
                 element={
                     <ProtectedRoute>
                         <ProfileOverviewPage />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route
+                path="/verify-pdf"
+                element={
+                    <ProtectedRoute>
+                        <VerifyPdfPage />
                     </ProtectedRoute>
                 }
             />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FiEye, FiEyeOff, FiGlobe, FiLock, FiMail } from "react-icons/fi";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import Popup from "../components/Popup";
 import api from "../services/api";
@@ -14,6 +14,7 @@ function Login() {
   const [showPopup, setShowPopup] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -44,7 +45,9 @@ function Login() {
       setShowPopup(true);
       window.setTimeout(() => {
         setShowPopup(false);
-        navigate("/dashboard");
+        const queryReturnTo = new URLSearchParams(location.search).get("returnTo");
+        const requestedPath = location.state?.from?.pathname || queryReturnTo;
+        navigate(requestedPath && requestedPath !== "/login" ? requestedPath : "/dashboard", { replace: true });
       }, 1500);
     } catch (error) {
       setFormError(
@@ -70,7 +73,7 @@ function Login() {
           </p>
           <ul className="auth-benefits">
             <li>Real-time multilingual conversations</li>
-            <li>Private meeting history and exports</li>
+            <li>Private meeting and chat history</li>
             <li>Your language preferences in one place</li>
           </ul>
         </aside>

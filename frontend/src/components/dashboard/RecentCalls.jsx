@@ -5,17 +5,16 @@ import { useEffect, useState } from "react";
 import { getRecentCalls } from "../../services/recentCallsService";
 
 import {
-    FiPhone,
     FiVideo,
     FiMic,
-    FiClock,
-    FiFileText,
-    FiPlay
+    FiClock
 } from "react-icons/fi";
 
 function RecentCalls() {
 
     const [calls, setCalls] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
 
@@ -32,6 +31,9 @@ function RecentCalls() {
             catch (error) {
 
                 console.error("Recent Calls Error:", error);
+                setError(error.message || "Unable to load call history.");
+            } finally {
+                setLoading(false);
 
             }
 
@@ -61,8 +63,13 @@ function RecentCalls() {
 
             </div>
 
-            {
-
+            {loading ? (
+                <p className="dashboard-state">Loading call history…</p>
+            ) : error ? (
+                <p className="dashboard-state error">{error}</p>
+            ) : calls.length === 0 ? (
+                <p className="dashboard-state">No previous meetings found.</p>
+            ) : (
                 calls.map((call) => (
 
                     <div
@@ -141,35 +148,12 @@ function RecentCalls() {
 
                             </small>
 
-                            <div className="call-buttons">
-
-                                <button>
-
-                                    <FiPlay />
-
-                                </button>
-
-                                <button>
-
-                                    <FiFileText />
-
-                                </button>
-
-                                <button>
-
-                                    <FiPhone />
-
-                                </button>
-
                             </div>
 
                         </div>
 
-                    </div>
-
                 ))
-
-            }
+            )}
 
         </div>
 

@@ -4,24 +4,24 @@ from uuid import uuid4
 
 from bson import ObjectId
 
-from app.config.database import database, users_collection
+from app.config.database import (
+    chat_messages_collection,
+    database,
+    transcripts_collection,
+    translations_collection,
+    users_collection,
+)
 from app.models.Meeting import Meeting
+from app.ai.language_config import SUPPORTED_LANGUAGES, language_code
 
 meetings_collection = database["meetings"]
 logger = logging.getLogger(__name__)
 
-LANGUAGE_CODES = {
-    "English": "en", "Telugu": "te", "Hindi": "hi", "Tamil": "ta",
-    "Kannada": "kn", "Malayalam": "ml", "Bengali": "bn", "Marathi": "mr",
-    "Gujarati": "gu", "Punjabi": "pa", "Urdu": "ur", "Spanish": "es",
-    "French": "fr", "German": "de", "Italian": "it", "Portuguese": "pt",
-    "Russian": "ru", "Chinese": "zh", "Japanese": "ja", "Korean": "ko",
-    "Arabic": "ar",
-}
+LANGUAGE_CODES = SUPPORTED_LANGUAGES
 
 
 def _source_language_code(preferred_language: str) -> str:
-    return LANGUAGE_CODES.get(preferred_language, preferred_language or "en")
+    return language_code(preferred_language)
 
 
 # ==========================================
@@ -34,6 +34,9 @@ async def create_meeting(
     preferred_language: str,
     output_mode: str
 ):
+
+    if not _source_language_code(preferred_language):
+        return {"success": False, "message": "Unsupported meeting language."}
 
     # Get Host Details
     user = await users_collection.find_one(
@@ -73,7 +76,9 @@ async def create_meeting(
 
         status="active",
 
-        source_language="Detecting...",
+        # This is the host's explicitly selected source language.  The live
+        # pipeline never performs automatic language detection.
+        source_language=_source_language_code(preferred_language),
 
         preferred_language=preferred_language,
 
@@ -165,6 +170,8 @@ async def join_meeting(
     resolved_source_language = _source_language_code(
         source_language or preferred_language
     )
+    if not resolved_source_language:
+        return {"success": False, "message": "Unsupported participant language."}
 
     participant = {
         "user_id": user_id,
@@ -416,6 +423,63 @@ async def get_participants(
     }
 
 
+async def get_meeting_history(meeting_id: str, user_id: str):
+    """Return only conversation records the current meeting participant may see."""
+    meeting = await meetings_collection.find_one(
+        {"meeting_id": meeting_id}, {"_id": 0, "participants.user_id": 1}
+    )
+    if not meeting:
+        return {"success": False, "message": "Meeting not found."}
+
+    participant_ids = {str(item.get("user_id")) for item in meeting.get("participants", [])}
+    if str(user_id) not in participant_ids:
+        return {"success": False, "message": "You are not a participant in this meeting."}
+
+    transcripts = await transcripts_collection.find(
+        {"meeting_id": meeting_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(length=None)
+    translations = await translations_collection.find(
+        {"meeting_id": meeting_id, "recipient_id": str(user_id)}, {"_id": 0}
+    ).sort("created_at", 1).to_list(length=None)
+    chat_records = await chat_messages_collection.find(
+        {"meeting_id": meeting_id, "$or": [
+            {"sender_id": str(user_id)},
+            {"recipient_ids": str(user_id)},
+        ]}, {"_id": 0}
+    ).sort("timestamp", 1).to_list(length=None)
+
+    chats = []
+    for record in chat_records:
+        delivery = next(
+            (item for item in record.get("deliveries", [])
+             if str(item.get("recipient_id")) == str(user_id)),
+            None,
+        )
+        chats.append({
+            "type": "chat",
+            "meeting_id": meeting_id,
+            "message_id": record.get("message_id"),
+            "user_id": record.get("sender_id"),
+            "sender_id": record.get("sender_id"),
+            "name": record.get("sender_name", "Participant"),
+            "user_name": record.get("sender_name", "Participant"),
+            "recipient_id": str(user_id),
+            "source_language": record.get("source_language"),
+            "original_text": record.get("original_text", ""),
+            "text": (delivery or {}).get("text") or record.get("original_text", ""),
+            "translated_text": (delivery or {}).get("text"),
+            "is_translated": bool((delivery or {}).get("is_translated")),
+            "time": record.get("timestamp", ""),
+        })
+
+    return {
+        "success": True,
+        "transcripts": transcripts,
+        "translations": translations,
+        "chat_messages": chats,
+    }
+
+
 # ==========================================
 # GET ACTIVE MEETING
 # ==========================================
@@ -510,7 +574,9 @@ async def get_active_meeting(user_id: str):
             "participants": len(meeting["participants"]),
             "participant_list": meeting["participants"],
             "status": meeting["status"],
-            "source_language": meeting.get("source_language", "Detecting..."),
+            "source_language": meeting.get("source_language") or _source_language_code(
+                meeting.get("preferred_language", "")
+            ),
             "preferred_language": meeting.get(
                 "preferred_language",
                 meeting.get("target_language", "English")

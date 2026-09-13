@@ -21,7 +21,7 @@ export default function CTA() {
         <p>
           Experience real-time multilingual communication powered by
           Transformer AI. Create secure meeting rooms, translate speech
-          instantly, and export verified transcripts with ease.
+          instantly, with meeting records kept available in the app.
         </p>
 
         <div className="cta-buttons">

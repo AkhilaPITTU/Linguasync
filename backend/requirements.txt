@@ -1,6 +1,5 @@
 # Python 3.11 / Render runtime dependencies for LINGUASYNC.
-# Translation uses the public LibreTranslate REST API; no local translation
-# model is retained in the Render process.
+# Translation uses the public MyMemory REST API; no local model is retained.
 
 # Web application and persistence
 fastapi==0.140.0
@@ -18,13 +17,21 @@ fastapi-mail==1.6.5
 # Audio and speech recognition
 numpy==2.4.6
 av==18.0.0
-faster-whisper==1.2.1
-ctranslate2==4.8.1
-onnxruntime==1.28.0
 
 # Translation API client
 requests==2.34.2
 
 # Existing application features
 edge-tts==7.2.8
-reportlab>=4.2,<5
+
+# Conversation PDF export: rendering + real cryptographic PDF signing
+# (PAdES / PKCS#7, not a watermark or checksum). cryptography is already
+# pulled in by python-jose[cryptography] above; pinned explicitly here
+# since this feature depends on it directly.
+reportlab>=4.2
+cryptography>=42
+pyhanko==0.37.0
+pyhanko-certvalidator>=0.32
+asn1crypto>=1.5
+arabic-reshaper>=3.0
+python-bidi>=0.6

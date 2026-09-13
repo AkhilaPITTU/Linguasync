@@ -1,6 +1,7 @@
 from bson import ObjectId
 
 from app.config.database import meetings_collection, users_collection
+from app.utils.timezone_format import format_ist
 
 
 async def recent_calls_service(user_id: str):
@@ -15,9 +16,10 @@ async def recent_calls_service(user_id: str):
                 ]
             }
         )
+        # Include every meeting the authenticated user hosted or joined.
+        # The previous five-record limit made older call history disappear.
         .sort("started_at", -1)
-        .limit(5)
-        .to_list(length=5)
+        .to_list(length=None)
     )
 
     recent_calls = []
@@ -50,7 +52,7 @@ async def recent_calls_service(user_id: str):
 
         source_language = meeting.get(
             "source_language",
-            "Detecting..."
+            ""
         )
 
         target_language = meeting.get(
@@ -80,9 +82,11 @@ async def recent_calls_service(user_id: str):
                 duration = f"{minutes} min"
 
         if started_at:
-            time = started_at.strftime(
-                "%d %b %Y %I:%M %p"
-            )
+            # Displayed in IST -- see app.utils.timezone_format -- for the
+            # same reason and via the same helper as the conversation
+            # export/verify feature; started_at itself is left as the
+            # stored UTC value.
+            time = format_ist(started_at)
         else:
             time = "-"
 

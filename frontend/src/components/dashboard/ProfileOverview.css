@@ -72,6 +72,21 @@ PROFILE OVERVIEW
 
 }
 
+.profile-image-action{
+    margin:-6px 0 18px;
+    color:#c4b5fd;
+    cursor:pointer;
+    font-size:13px;
+}
+
+.profile-image-action input{
+    position:absolute;
+    width:1px;
+    height:1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+}
+
 /* ===================================== */
 
 .profile-info{

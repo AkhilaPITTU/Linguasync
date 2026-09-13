@@ -1,2 +1,0 @@
-# Additional dependency required by the user-controlled conversation PDF export.
-reportlab>=4.2,<5

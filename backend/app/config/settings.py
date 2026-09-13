@@ -98,15 +98,18 @@ class Settings:
         "uploads"
     )
 
+    PROFILE_IMAGE_FOLDER = os.getenv(
+        "PROFILE_IMAGE_FOLDER",
+        "profile_images"
+    )
+
+    # Root folder conversation/transcript exports are written under (already
+    # present in .env.example; previously unused by any Settings attribute).
+    # The conversation PDF export feature writes signed PDFs to
+    # "<TRANSCRIPT_EXPORT_FOLDER>/signed/".
     TRANSCRIPT_EXPORT_FOLDER = os.getenv(
         "TRANSCRIPT_EXPORT_FOLDER",
         "transcript_exports"
     )
-
-    PDF_UNICODE_FONT_PATH = os.getenv(
-        "PDF_UNICODE_FONT_PATH",
-        r"C:\Windows\Fonts\Nirmala.ttc",
-    )
-
 
 settings = Settings()

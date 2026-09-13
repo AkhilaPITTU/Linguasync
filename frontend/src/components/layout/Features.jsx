@@ -5,7 +5,6 @@ import {
   FaBrain,
   FaUserFriends,
   FaShieldAlt,
-  FaFileExport,
   FaEdit,
   FaNetworkWired,
 } from "react-icons/fa";
@@ -44,7 +43,7 @@ function Features() {
 
         <p>
           LINGUASYNC integrates Transformer Neural Machine Translation,
-          Faster-Whisper Speech Recognition, Context Memory,
+          Deepgram Nova-3 Speech Recognition, Meeting History,
           Secure Transcript Logging and Human Verification into
           one intelligent multilingual communication platform.
         </p>
@@ -70,7 +69,7 @@ function Features() {
 
           <p>
             Converts multilingual speech into high-quality text
-            using Faster-Whisper with low latency.
+            using Deepgram Nova-3 with low latency.
           </p>
 
           <div className="wave">
@@ -247,29 +246,6 @@ function Features() {
             <li>✔ SHA-256 Hash</li>
             <li>✔ Integrity Verified</li>
           </ul>
-
-        </motion.div>
-
-        {/* Card 8 */}
-
-        <motion.div
-          className="card"
-          variants={cardAnimation}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-        >
-
-          <div className="icon-box">
-            <FaFileExport />
-          </div>
-
-          <h3>Export Transcript</h3>
-
-          <p>
-            Download conversations as PDF or TXT with secure
-            verification.
-          </p>
 
         </motion.div>
 

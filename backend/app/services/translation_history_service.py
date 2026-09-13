@@ -1,4 +1,5 @@
 from app.config.database import translations_collection
+from app.utils.timezone_format import format_ist
 
 
 async def translation_history_service(user_id: str):
@@ -46,11 +47,10 @@ async def translation_history_service(user_id: str):
                 0
             ),
 
-            "time": (
-                created_at.strftime("%d %b %Y %I:%M %p")
-                if created_at
-                else "-"
-            )
+            # Displayed in IST -- see app.utils.timezone_format -- to
+            # match every other conversation-related timestamp in the app;
+            # created_at itself is left as the stored UTC value.
+            "time": format_ist(created_at)
 
         })
 

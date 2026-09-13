@@ -6,36 +6,15 @@ const API = axios.create({
 });
 
 export const getExportedChats = async () => {
+    const token = localStorage.getItem("access_token");
+    const response = await API.get("/dashboard/chat-history", {
+        headers: { Authorization: `Bearer ${token}` },
+    });
 
-    try {
-
-        const token = localStorage.getItem("access_token");
-
-        const response = await API.get(
-            "/dashboard/exported-chats",
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            }
-        );
-
-        if (response.data.success) {
-
-            return response.data.data;
-
-        }
-
-        return [];
-
+    if (!response.data?.success || !Array.isArray(response.data.data)) {
+        throw new Error(response.data?.message || "Unable to load chat history.");
     }
 
-    catch (error) {
-
-        console.error("Exported Chats Error:", error);
-
-        return [];
-
-    }
+    return response.data.data;
 
 };

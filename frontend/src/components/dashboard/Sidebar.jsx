@@ -8,6 +8,7 @@ import {
   FiGrid,
   FiLogOut,
   FiPhone,
+  FiShield,
   FiUser,
 } from "react-icons/fi";
 
@@ -29,7 +30,8 @@ function Sidebar() {
     { title: "Start Call", icon: <FiPhone />, path: "/create-meeting" },
     { title: "Call History", icon: <FiClock />, path: "/call-history" },
     { title: "Translation History", icon: <FiGlobe />, path: "/translation-history" },
-    { title: "Exported Chats", icon: <FiFileText />, path: "/exports" },
+    { title: "Chat History", icon: <FiFileText />, path: "/chat-history" },
+    { title: "Verify PDF", icon: <FiShield />, path: "/verify-pdf" },
     { title: "Profile", icon: <FiUser />, path: "/profile" },
   ];
 

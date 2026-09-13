@@ -2,7 +2,9 @@ import "./ProfileOverview.css";
 
 import { useEffect, useState } from "react";
 
-import { getProfile, updateProfile } from "../../services/profileService";
+import { getProfile, updateProfile, updateProfileImage } from "../../services/profileService";
+import { API_BASE_URL } from "../../services/apiConfig";
+import { SUPPORTED_LANGUAGES } from "../../constants/languages";
 
 import {
     FiGlobe,
@@ -33,11 +35,22 @@ function ProfileOverview() {
 
     });
     const [editing, setEditing] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
+    const [imageUploading, setImageUploading] = useState(false);
+    const [imagePreview, setImagePreview] = useState("");
+
+    const profileImageUrl = imagePreview || (
+        profile.profile_image
+            ? `${API_BASE_URL}${profile.profile_image}`
+            : "/images/user.png"
+    );
 
     useEffect(() => {
+
+        let active = true;
 
         async function fetchProfile() {
 
@@ -45,19 +58,26 @@ function ProfileOverview() {
 
                 const data = await getProfile();
 
-                setProfile(data);
+                if (active) setProfile(data);
 
             }
 
             catch (error) {
 
                 console.error("Profile Error:", error);
+                if (active) setError(error.response?.data?.detail || error.message || "Unable to load profile.");
+            } finally {
+                if (active) setLoading(false);
 
             }
 
         }
 
         fetchProfile();
+
+        return () => {
+            active = false;
+        };
 
     }, []);
 
@@ -89,18 +109,68 @@ function ProfileOverview() {
         }
     };
 
+    const changeProfileImage = async (event) => {
+        const image = event.target.files?.[0];
+        if (!image) return;
+
+        if (!['image/png', 'image/jpeg'].includes(image.type)) {
+            setError("Choose a PNG, JPG, or JPEG image.");
+            return;
+        }
+        if (image.size > 5 * 1024 * 1024) {
+            setError("Profile image must be 5 MB or smaller.");
+            return;
+        }
+
+        const previewUrl = URL.createObjectURL(image);
+        setImagePreview(previewUrl);
+        setImageUploading(true);
+        setError("");
+
+        try {
+            const response = await updateProfileImage(image);
+            if (!response?.success) throw new Error(response?.message || "Unable to update profile image.");
+            setProfile(response.data);
+            URL.revokeObjectURL(previewUrl);
+            setImagePreview("");
+            setMessage("Profile picture updated successfully.");
+        } catch (uploadError) {
+            setError(uploadError.response?.data?.detail || uploadError.message || "Unable to update profile image.");
+        } finally {
+            setImageUploading(false);
+            event.target.value = "";
+        }
+    };
+
     return (
 
         <div className="profile-card">
+
+            {loading ? (
+                <p className="profile-feedback">Loading profile…</p>
+            ) : error && !editing ? (
+                <p className="profile-feedback error">{error}</p>
+            ) : (
+                <>
 
             {/* Avatar */}
 
             <div className="profile-top">
 
                 <img
-                    src="/images/user.png"
+                    src={profileImageUrl}
                     alt="Profile"
                 />
+
+                <label className="profile-image-action">
+                    <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={changeProfileImage}
+                        disabled={imageUploading}
+                    />
+                    {imageUploading ? "Uploading…" : "Change Profile Picture"}
+                </label>
 
                 <h2>
 
@@ -140,8 +210,8 @@ function ProfileOverview() {
                                 value={profile.preferred_language || "English"}
                                 onChange={(event) => setProfile((current) => ({ ...current, preferred_language: event.target.value }))}
                             >
-                                {["English", "Telugu", "Hindi", "Tamil", "Kannada", "Malayalam", "Bengali", "Marathi", "Gujarati", "Punjabi"].map((language) => (
-                                    <option key={language} value={language}>{language}</option>
+                                {SUPPORTED_LANGUAGES.map(({ name }) => (
+                                    <option key={name} value={name}>{name}</option>
                                 ))}
                             </select>
                         </label>
@@ -252,6 +322,9 @@ function ProfileOverview() {
 
             {message && <p className="profile-feedback success">{message}</p>}
             {error && <p className="profile-feedback error">{error}</p>}
+
+                </>
+            )}
 
         </div>
 

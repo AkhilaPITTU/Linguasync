@@ -147,6 +147,19 @@
     overflow:hidden;
 
     flex-shrink:0;
+
+    opacity:1;
+    transform:translateX(0);
+    transition:width .28s ease, padding .28s ease, opacity .2s ease, transform .28s ease;
+}
+
+.meeting-right.is-hidden{
+    width:0;
+    padding-left:0;
+    padding-right:0;
+    opacity:0;
+    transform:translateX(24px);
+    pointer-events:none;
 }
 
 /* ---------------- Responsive ---------------- */

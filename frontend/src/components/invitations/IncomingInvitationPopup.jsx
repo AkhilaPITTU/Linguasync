@@ -6,8 +6,9 @@ import {
     rejectInvitation,
 } from "../../services/invitationService";
 import "./IncomingInvitationPopup.css";
+import { SUPPORTED_LANGUAGES } from "../../constants/languages";
 
-const LANGUAGES = ["English", "Telugu", "Hindi", "Tamil", "Kannada", "Malayalam", "Bengali", "Marathi", "Gujarati", "Punjabi"];
+const LANGUAGES = SUPPORTED_LANGUAGES.map(({ name }) => name);
 
 function IncomingInvitationPopup() {
     const [invitation, setInvitation] = useState(null);

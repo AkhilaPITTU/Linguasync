@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from app.config.security import get_user_id
 from app.websocket.connection_manager import manager
-from app.ai.whisper_service import whisper_service
+from app.ai.deepgram_service import deepgram_service
 from app.ai.translation_service import LANGUAGE_CODES, translation_service
 from app.config.database import (
     database,
@@ -41,7 +41,7 @@ MAX_QUEUED_CHUNKS = 5
 MAX_POSTPROCESS_CHUNKS = 5
 ASR_DEBUG_ONLY = os.getenv("ASR_DEBUG_ONLY", "false").lower() == "true"
 # ASR-only debugging defaults to VAD off, because the diagnostic question is
-# whether faster-whisper itself can recognize the complete validated chunk.
+# whether Deepgram can recognize the complete validated chunk.
 # Production processing keeps VAD enabled unless explicitly overridden.
 ASR_DEBUG_DISABLE_VAD = os.getenv(
     "ASR_DEBUG_DISABLE_VAD", "true" if ASR_DEBUG_ONLY else "false"
@@ -161,7 +161,7 @@ async def _process_audio_chunk(
         # A participant's selected preferred language is the application's
         # explicit source-speech language setting for that speaker. Resolve
         # it through the existing canonical language mapping and pass that code
-        # to Whisper. Recipient preferences remain translation targets later
+        # to Deepgram. Recipient preferences remain translation targets later
         # in the post-processing flow.
         stored_preferred_language = speaker.get(
             "preferred_language", speaker.get("language", "")
@@ -217,7 +217,7 @@ async def _process_audio_chunk(
             f"speaker_id={user_id} mongodb_preferred_language="
             f"{stored_preferred_language!r} mongodb_source_language="
             f"{stored_source_language!r} websocket_source_language="
-            f"{websocket_source_language!r} resolved_whisper_language="
+            f"{websocket_source_language!r} resolved_deepgram_language="
             f"{configured_source_language!r}"
         )
 
@@ -269,11 +269,11 @@ async def _process_audio_chunk(
 
         audio_quality = noise_result["audio_quality"]
 
-        print(f"[audio:{chunk_id}] Whisper start")
+        print(f"[audio:{chunk_id}] Deepgram start")
         transcription_started_at = perf_counter()
         pcm_samples = noise_result.get("pcm_samples")
         print(
-            f"[WHISPER-INPUT] chunk_id={chunk_id} user_id={user_id} "
+            f"[DEEPGRAM-INPUT] chunk_id={chunk_id} user_id={user_id} "
             f"language_hint={configured_source_language} sample_rate="
             f"{noise_result.get('whisper_sample_rate')} channels=1 "
             f"duration={noise_result.get('duration')} number_of_samples="
@@ -293,18 +293,18 @@ async def _process_audio_chunk(
             print(f"[ASR-DEBUG-WAV] chunk_id={chunk_id} path={wav_path}")
         vad_filter = not (ASR_DEBUG_ONLY and ASR_DEBUG_DISABLE_VAD)
         print(
-            f"[LANGUAGE-PIPELINE] stage=whisper_call chunk_id={chunk_id} "
+            f"[LANGUAGE-PIPELINE] stage=deepgram_call chunk_id={chunk_id} "
             f"speaker_id={user_id} language_argument={configured_source_language!r} "
             "task=transcribe beam_size=5 temperature=0.0 "
             f"vad_filter={vad_filter} condition_on_previous_text=False"
         )
         logger.info(
-            "Calling Whisper with fixed language=%s", configured_source_language
+            "Calling Deepgram with fixed language=%s", configured_source_language
         )
         # TEMP DEBUG LOGGING (requested for language debugging; remove when done)
-        print(f"[DEBUG-WHISPER-CALL] language={configured_source_language}")
+        print(f"[DEBUG-DEEPGRAM-CALL] language={configured_source_language}")
         transcript_result = await asyncio.to_thread(
-            whisper_service.transcribe,
+            deepgram_service.transcribe,
             pcm_samples,
             vad_filter=vad_filter,
             language=configured_source_language,
@@ -324,7 +324,7 @@ async def _process_audio_chunk(
 
         if not transcript_result.get("success", True):
             print(
-                f"[audio:{chunk_id}] Whisper failure: "
+                f"[audio:{chunk_id}] Deepgram failure: "
                 f"{transcript_result.get('reason')}"
             )
             return
@@ -334,12 +334,12 @@ async def _process_audio_chunk(
 
         # TEMP DEBUG LOGGING (requested for language debugging; remove when done)
         print(
-            f"[DEBUG-WHISPER-RESULT] transcript={transcript!r} "
+            f"[DEBUG-DEEPGRAM-RESULT] transcript={transcript!r} "
             f"language_used={configured_source_language!r}"
         )
 
         print(
-            f"[LANGUAGE-PIPELINE] stage=whisper_result chunk_id={chunk_id} "
+            f"[LANGUAGE-PIPELINE] stage=deepgram_result chunk_id={chunk_id} "
             f"speaker_id={user_id} configured_language={configured_source_language!r} "
             f"segment_count={len(transcript_result.get('segments', []))} "
             f"duration={transcription_seconds:.2f}s raw_text={transcript!r}"
@@ -351,7 +351,7 @@ async def _process_audio_chunk(
         )
         for segment in transcript_result.get("segments", []):
             print(
-                f"[WHISPER-SEGMENT] chunk_id={chunk_id} start={segment.get('start')} "
+                f"[DEEPGRAM-SEGMENT] chunk_id={chunk_id} start={segment.get('start')} "
                 f"end={segment.get('end')} text={segment.get('text')!r} "
                 f"avg_logprob={segment.get('avg_logprob')} "
                 f"no_speech_prob={segment.get('no_speech_prob')} "
@@ -363,10 +363,10 @@ async def _process_audio_chunk(
             return
 
         if not transcript.strip():
-            print(f"[audio:{chunk_id}] Whisper returned empty text.")
+            print(f"[audio:{chunk_id}] Deepgram returned empty text.")
             return
 
-        # The live meeting flow never uses Whisper's detected language as a
+        # The live meeting flow never uses a provider-detected language as a
         # fallback. The speaker-selected language is required before ASR.
         translation_source_language = configured_source_language
 
@@ -472,8 +472,7 @@ async def _process_audio_chunk(
         job = {
             "chunk_id": chunk_id, "user_id": user_id, "user_name": user_name,
             "transcript": transcript,
-            # Keep the explicit speaker preference separate from Whisper's
-            # diagnostic language result. Translation must use this source.
+            # Translation always uses the explicit speaker-selected source.
             "source_language": translation_source_language,
             "speaker_preferred_language": stored_preferred_language,
             "whisper_confidence": whisper_confidence, "audio_quality": audio_quality,

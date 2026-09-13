@@ -2,27 +2,15 @@ import logging
 
 import requests
 
+from app.ai.language_config import LANGUAGE_ALIASES, SUPPORTED_LANGUAGES, language_code
+
 
 MYMEMORY_URL = "https://api.mymemory.translated.net/get"
 REQUEST_TIMEOUT_SECONDS = 15
 
 
-LANGUAGE_CODES = {
-    "English": "en",
-    "Hindi": "hi",
-    "Telugu": "te",
-}
-
-_LANGUAGE_ALIASES = {
-    "english": "en",
-    "en": "en",
-    "hindi": "hi",
-    "hindi (india)": "hi",
-    "hi": "hi",
-    "telugu": "te",
-    "telugu (india)": "te",
-    "te": "te",
-}
+LANGUAGE_CODES = SUPPORTED_LANGUAGES
+_LANGUAGE_ALIASES = LANGUAGE_ALIASES
 
 # MyMemory frequently mistranslates very short, common phrases (e.g. a bare
 # "Hello" can come back as an unrelated sentence). For these well-known
@@ -82,12 +70,8 @@ class TranslationService:
             return default
 
         # Clients and legacy MongoDB records can use BCP-47 values such as
-        # ``hi-IN``. Whisper and MyMemory require the base ISO code.
-        base_code = normalized.replace("_", "-").split("-", 1)[0]
-        return _LANGUAGE_ALIASES.get(
-            normalized,
-            _LANGUAGE_ALIASES.get(base_code, default),
-        )
+        # ``hi-IN``. Deepgram and MyMemory require the base ISO code.
+        return language_code(normalized, default)
 
     def _lookup_common_translation(self, cleaned_text, source_code, target_code):
         """Return a known-good translation for common short phrases, if any.
@@ -121,8 +105,15 @@ class TranslationService:
             }
 
         cleaned_text = text.strip()
-        source_code = self.get_language_code(source_lang)
-        target_code = self.get_language_code(target_lang)
+        source_code = self.get_language_code(source_lang, default=None)
+        target_code = self.get_language_code(target_lang, default=None)
+        if not source_code or not target_code:
+            return {
+                "success": False,
+                "translated_text": None,
+                "reason": "unsupported_language",
+                "message": "Source and target languages must be supported live-meeting languages.",
+            }
 
         if source_code == target_code:
             return {

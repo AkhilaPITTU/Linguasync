@@ -4,6 +4,7 @@ from app.config.database import (
     meetings_collection,
     translations_collection
 )
+from app.utils.timezone_format import format_ist
 
 
 async def recent_activity_service(user_id: str):
@@ -88,9 +89,10 @@ async def recent_activity_service(user_id: str):
     for activity in activities:
 
         if activity["_timestamp"] != datetime.min:
-            activity["time"] = activity["_timestamp"].strftime(
-                "%d %b %Y %I:%M %p"
-            )
+            # Displayed in IST -- see app.utils.timezone_format -- to
+            # match every other conversation-related timestamp in the
+            # app; the stored value itself is untouched.
+            activity["time"] = format_ist(activity["_timestamp"])
         else:
             activity["time"] = "-"
 

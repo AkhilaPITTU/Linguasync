@@ -49,7 +49,7 @@ class NoiseDetectionService:
                 # Decode browser Opus frames to actual mono floating-point
                 # PCM before computing RMS. `to_ndarray()` alone preserves
                 # the source sample format and can vary across browsers.
-                # Faster-Whisper accepts float32 NumPy audio at 16 kHz. Use
+                # Deepgram receives mono float32 PCM converted to WAV at 16 kHz. Use
                 # this already-decoded PCM for ASR as well as quality checks,
                 # avoiding a second WebM decode in the transcription path.
                 # Keep a decoded mono float32 reference at the Opus sample
@@ -149,7 +149,7 @@ class NoiseDetectionService:
     def save_debug_wav(samples: np.ndarray, chunk_id: str) -> str:
         """Write a standard 16 kHz mono PCM WAV for offline ASR checks."""
         path = Path(tempfile.gettempdir()) / f"linguasync-asr-{chunk_id}.wav"
-        # The live Whisper call still receives the original float32 array.
+        # The live Deepgram call receives this normalized float32 array.
         # This file is a dependency-free diagnostic copy for playback and
         # offline comparison, converted once to standard PCM16 WAV.
         pcm16 = np.clip(samples, -1.0, 1.0)

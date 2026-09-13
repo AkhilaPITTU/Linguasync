@@ -131,3 +131,11 @@ export const joinMeeting = async (
 
   return response.data;
 };
+
+// Restore persisted conversation records after a page reload or reconnect.
+export const getMeetingHistory = async (meetingId) => {
+  const response = await API.get(`/api/meeting/${meetingId}/history`, {
+    headers: getAuthHeaders(),
+  });
+  return response.data;
+};

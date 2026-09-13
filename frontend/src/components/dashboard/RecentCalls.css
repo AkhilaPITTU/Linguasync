@@ -130,40 +130,6 @@ RECENT CALLS
 
 /* ========================================== */
 
-.call-buttons{
-
-    display:flex;
-
-    gap:10px;
-
-}
-
-.call-buttons button{
-
-    width:40px;
-
-    height:40px;
-
-    border:none;
-
-    border-radius:12px;
-
-    background:#7C3AED;
-
-    color:white;
-
-    cursor:pointer;
-
-    transition:.3s;
-
-}
-
-.call-buttons button:hover{
-
-    background:#2563EB;
-
-}
-
 /* ========================================== */
 
 @media(max-width:768px){
@@ -186,4 +152,13 @@ width:100%;
 
 }
 
+}
+
+.dashboard-state{
+    margin:18px 0 0;
+    color:#94A3B8;
+}
+
+.dashboard-state.error{
+    color:#fca5a5;
 }

@@ -1,4 +1,4 @@
-"""Evaluate Linguasync's production Whisper transcription against references.
+"""Evaluate Linguasync's production Deepgram transcription against references.
 
 Examples (run from the backend directory):
   python evaluation/evaluate_transcription.py --audio C:\\audio\\sample.webm --reference C:\\audio\\sample.txt
@@ -101,9 +101,8 @@ def decode_non_webm_audio(audio_path: Path) -> dict:
 
 
 def transcribe_case(audio_path: Path, language: str | None) -> tuple[dict, dict]:
-    """Run the same live decode/Whisper service, without grammar or translation."""
-    # Import lazily so --self-test can validate metrics without loading the model.
-    from app.ai.whisper_service import whisper_service
+    """Run the same live decode/Deepgram service, without grammar or translation."""
+    from app.ai.deepgram_service import deepgram_service
 
     if not audio_path.is_file():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
@@ -116,12 +115,14 @@ def transcribe_case(audio_path: Path, language: str | None) -> tuple[dict, dict]
         decoded = decode_non_webm_audio(audio_path)
 
     started = perf_counter()
-    result = whisper_service.transcribe(
-        decoded["pcm_samples"], vad_filter=True, language=language or None
+    if not language:
+        raise ValueError("--language is required; evaluation does not auto-detect language.")
+    result = deepgram_service.transcribe(
+        decoded["pcm_samples"], vad_filter=True, language=language
     )
     result["processing_seconds"] = perf_counter() - started
     if not result.get("success"):
-        raise RuntimeError(result.get("reason", "Whisper transcription failed."))
+        raise RuntimeError(result.get("reason", "Deepgram transcription failed."))
     return result, decoded
 
 
@@ -141,8 +142,8 @@ def print_case_report(index: int, audio_path: Path, reference: str, result: dict
     print(f"SUBSTITUTIONS: {substitutions}")
     print(f"DELETIONS: {deletions}")
     print(f"INSERTIONS: {insertions}")
-    print(f"LANGUAGE: {result.get('language')} ({result.get('language_probability')})")
-    print(f"WHISPER CONFIDENCE: {result.get('confidence')}%")
+    print(f"LANGUAGE: {result.get('language')} (configured)")
+    print(f"DEEPGRAM CONFIDENCE: {result.get('confidence')}%")
     print(f"PROCESSING TIME: {result.get('processing_seconds', 0):.2f}s")
     return {
         "reference_words": reference_word_count,
@@ -182,20 +183,20 @@ def run_self_test() -> None:
     counts = word_error_counts(reference, recognized)
     assert counts == (1, 0, 0), counts
     wer = sum(counts) / len(normalize_words(reference))
-    print("Metric self-test passed (synthetic text only; Whisper was not run).")
+    print("Metric self-test passed (synthetic text only; Deepgram was not called).")
     print(f"WER: {wer * 100:.2f}%")
     print(f"WORD ACCURACY: {(1 - wer) * 100:.2f}%")
     print("SUBSTITUTIONS: 1\nDELETIONS: 0\nINSERTIONS: 0")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Evaluate the production Linguasync Whisper pipeline.")
+    parser = argparse.ArgumentParser(description="Evaluate the production Linguasync Deepgram pipeline.")
     parser.add_argument("--audio", help="One audio file (WebM uses the exact live decoder).")
     parser.add_argument("--reference", help="UTF-8 text file containing the ground-truth transcript.")
     parser.add_argument("--case", action="append", nargs=2, default=[], metavar=("AUDIO", "REFERENCE"), help="Repeatable audio/reference pair.")
     parser.add_argument("--manifest", help="JSON list of {audio, reference, language?} cases, paths relative to the manifest.")
-    parser.add_argument("--language", help="Optional Whisper ISO language hint, e.g. en, te, hi.")
-    parser.add_argument("--self-test", action="store_true", help="Validate the WER calculation without loading Whisper.")
+    parser.add_argument("--language", help="Required Deepgram ISO language code, e.g. en, te, hi.")
+    parser.add_argument("--self-test", action="store_true", help="Validate the WER calculation without calling Deepgram.")
     args = parser.parse_args()
 
     if args.self_test:

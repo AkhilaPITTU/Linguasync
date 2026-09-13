@@ -24,3 +24,7 @@ Thumbs.db
 
 # Test files
 backend/test_motor.py
+
+# Conversation PDF export: server's private signing key/certificate
+# must never be committed.
+certs/

@@ -1,4 +1,4 @@
-from fastapi import Header
+from fastapi import Header, HTTPException, status
 
 from app.config.security import get_user_id
 
@@ -11,8 +11,18 @@ async def get_recent_calls(
 
 ):
 
-    token = authorization.split(" ")[1]
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization Header",
+        )
 
-    user_id = get_user_id(token)
+    user_id = get_user_id(authorization.split(" ", 1)[1])
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or Expired Token",
+        )
 
     return await recent_calls_service(user_id)

@@ -21,6 +21,7 @@ import {
     FiPhoneCall,
     FiX
 } from "react-icons/fi";
+import { SUPPORTED_LANGUAGES } from "../../constants/languages";
 
 const clearStaleMeetingCache = () => {
     localStorage.removeItem("meeting_id");
@@ -794,19 +795,9 @@ function ActiveCommunication() {
                                 }}
                             >
                                 <option value="">Select language</option>
-                                <option value="English">English</option>
-                                <option value="Telugu">Telugu</option>
-                                <option value="Hindi">Hindi</option>
-                                <option value="Tamil">Tamil</option>
-                                <option value="Kannada">Kannada</option>
-                                <option value="Malayalam">Malayalam</option>
-                                <option value="Bengali">Bengali</option>
-                                <option value="Marathi">Marathi</option>
-                                <option value="Gujarati">Gujarati</option>
-                                <option value="Punjabi">Punjabi</option>
-                                <option value="French">French</option>
-                                <option value="German">German</option>
-                                <option value="Spanish">Spanish</option>
+                                {SUPPORTED_LANGUAGES.map(({ name }) => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
                             </select>
 
                             <fieldset>

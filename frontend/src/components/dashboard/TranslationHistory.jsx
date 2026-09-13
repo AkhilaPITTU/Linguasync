@@ -6,8 +6,6 @@ import { getTranslationHistory } from "../../services/translationHistoryService"
 
 import {
     FiGlobe,
-    FiFileText,
-    FiDownload,
     FiCheckCircle
 } from "react-icons/fi";
 
@@ -129,26 +127,6 @@ function TranslationHistory() {
                                 </p>
 
                             </div>
-
-                        </div>
-
-                        <div className="translation-buttons">
-
-                            <button>
-
-                                <FiFileText />
-
-                                Transcript
-
-                            </button>
-
-                            <button>
-
-                                <FiDownload />
-
-                                Export
-
-                            </button>
 
                         </div>
 

@@ -6,6 +6,7 @@ import "@fontsource/noto-sans-devanagari/400.css";
 
 import websocketService from "../../services/websocketService";
 import { getLanguageCode } from "./languageCode";
+import { formatISTTime } from "../../utils/formatIST";
 
 const SCRIPT_FONT_FAMILY = '"Noto Sans Telugu", "Noto Sans Devanagari", "Noto Sans", sans-serif';
 
@@ -40,10 +41,12 @@ const ChatPanel = ({ messages = [], preferredLanguage = "English" }) => {
             // the browser cannot provide one.
             source_language: inputLanguage,
 
-            time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-            }),
+            // A real, absolute UTC instant -- not a pre-rendered local
+            // clock string -- so every recipient (and the exported PDF)
+            // can convert it to their own display timezone consistently.
+            // See formatISTTime() below for the IST conversion at render
+            // time.
+            time: new Date().toISOString(),
 
         });
 
@@ -95,13 +98,13 @@ const ChatPanel = ({ messages = [], preferredLanguage = "English" }) => {
 
                                     <span className="chat-name">
 
-                                        {(msg.country || "🌍")} {msg.name || "Unknown"}
+                                        {(msg.country || "🌍")} {msg.user_id === userId ? "You" : (msg.name || "Unknown")}
 
                                     </span>
 
                                     <span className="chat-time">
 
-                                        {msg.time || ""}
+                                        {formatISTTime(msg.time)}
 
                                     </span>
 

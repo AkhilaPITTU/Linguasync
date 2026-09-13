@@ -7,7 +7,6 @@ import {
   FaProjectDiagram,
   FaUsers,
   FaShieldAlt,
-  FaFileExport,
 } from "react-icons/fa";
 
 import { MdTranslate, MdEditDocument } from "react-icons/md";
@@ -20,8 +19,8 @@ const architecture = [
   },
   {
     icon: <MdTranslate />,
-    title: "Faster Whisper",
-    desc: "Convert speech into highly accurate real-time text."
+    title: "Deepgram Nova-3",
+    desc: "Convert speech into real-time text using the selected language."
   },
   {
     icon: <FaBrain />,
@@ -52,11 +51,6 @@ const architecture = [
     icon: <FaShieldAlt />,
     title: "AES + SHA-256",
     desc: "Secure transcripts with encryption and integrity verification."
-  },
-  {
-    icon: <FaFileExport />,
-    title: "Export",
-    desc: "Download verified transcripts in PDF or TXT format."
   },
 ];
 

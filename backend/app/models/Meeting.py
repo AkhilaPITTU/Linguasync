@@ -18,7 +18,7 @@ class Participant(BaseModel):
 
     preferred_language: str = "English"
 
-    source_language: str = "English"
+    source_language: str
 
     output_mode: str = "none"
 
@@ -48,11 +48,13 @@ class Meeting(BaseModel):
     status: Literal["active", "completed", "cancelled"]
 
     # Translation Information
-    source_language: str = "Detecting..."
+    source_language: str
 
     preferred_language: str
 
     output_mode: Literal[
+        "none",
+        "subtitle",
         "original",
         "text",
         "speech",

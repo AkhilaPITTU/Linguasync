@@ -19,10 +19,10 @@ const overviewLinks = [
     icon: FiGlobe,
   },
   {
-    title: "Exported chats",
-    description: "Access saved transcripts and exported conversation files.",
-    action: "View exports",
-    path: "/exports",
+    title: "Chat history",
+    description: "Review saved meeting chat messages.",
+    action: "View chat history",
+    path: "/chat-history",
     icon: FiFileText,
   },
   {

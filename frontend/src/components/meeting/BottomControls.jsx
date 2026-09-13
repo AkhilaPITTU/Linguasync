@@ -11,13 +11,13 @@ import {
     FaUsers,
     FaUserPlus,
     FaLanguage,
-    FaDownload,
     FaPhoneSlash,
     FaClosedCaptioning,
     FaVolumeUp,
     FaVolumeMute,
     FaDesktop,
     FaStop,
+    FaSpinner,
 } from "react-icons/fa";
 
 import webrtcService from "../../services/webrtcService";
@@ -27,7 +27,10 @@ import {
     leaveMeeting as leaveMeetingAPI,
     endMeeting as endMeetingAPI,
 } from "../../services/meetingService";
-import { exportConversationPdf } from "../../services/conversationPdfService";
+import {
+    downloadConversationPdf,
+    getExportErrorMessage,
+} from "../../services/conversationExportService";
 import { showToast } from "../notification/toastService";
 
 const BottomControls = ({
@@ -37,11 +40,6 @@ const BottomControls = ({
     onSpeakerChange = () => {},
     onMicrophoneChange = () => {},
     onBeforeLeave = async () => ({ flushed: false }),
-    transcript = [],
-    translations = [],
-    participants = [],
-    preferredLanguage = "English",
-    currentUserId,
     microphoneMuted = false,
     speakerMuted = false,
     isMeetingHost = false,
@@ -67,13 +65,8 @@ const BottomControls = ({
     const [leaveDialog, setLeaveDialog] =
         useState(false);
 
-    const [exportState, setExportState] =
-        useState("idle");
-
-    const [exportError, setExportError] =
-        useState("");
-
     const [isLeaving, setIsLeaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const flushPromiseRef = useRef(null);
 
     const meetingId =
@@ -174,13 +167,7 @@ const BottomControls = ({
 
         const handleEscape = (event) => {
 
-            if (event.key === "Escape" && !exportState.startsWith("exporting")) {
-
-                setLeaveDialog(false);
-                setExportState("idle");
-                setExportError("");
-
-            }
+            if (event.key === "Escape" && !isExporting) setLeaveDialog(false);
 
         };
 
@@ -188,7 +175,7 @@ const BottomControls = ({
 
         return () => window.removeEventListener("keydown", handleEscape);
 
-    }, [exportState]);
+    }, [isExporting]);
 
     const prepareForLeave = async () => {
         if (!flushPromiseRef.current) {
@@ -247,6 +234,57 @@ const BottomControls = ({
 
     };
 
+    // ==========================================
+    // SAVE & EXPORT (End Call confirmation modal)
+    // ==========================================
+
+    const handleSaveAndExport = async () => {
+
+        if (isExporting || isLeaving) return;
+
+        setIsExporting(true);
+
+        try {
+
+            await downloadConversationPdf(meetingId);
+            showToast("Your conversation PDF has been downloaded.", "success");
+
+            setLeaveDialog(false);
+            await completeLeave();
+
+        } catch (exportError) {
+
+            console.error("Conversation PDF export error:", exportError);
+            const message = await getExportErrorMessage(exportError);
+            showToast(message, "error");
+            // Keep the user in the meeting (and the modal open) so they can
+            // retry, or choose "Leave Without Saving" instead.
+
+        } finally {
+
+            setIsExporting(false);
+
+        }
+
+    };
+
+    const handleLeaveWithoutSaving = () => {
+
+        if (isExporting) return;
+
+        setLeaveDialog(false);
+        completeLeave();
+
+    };
+
+    const handleCancelLeaveDialog = () => {
+
+        if (isExporting) return;
+
+        setLeaveDialog(false);
+
+    };
+
     const toggleScreenShare = async () => {
         try {
             if (screenSharing) {
@@ -267,52 +305,7 @@ const BottomControls = ({
 
     const openLeaveDialog = () => {
 
-        setExportState("idle");
-        setExportError("");
         setLeaveDialog(true);
-
-    };
-
-    const leaveWithoutSaving = async () => {
-
-        setLeaveDialog(false);
-        await completeLeave();
-
-    };
-
-    const saveAndExport = async () => {
-
-        setExportState("exporting");
-        setExportError("");
-
-        try {
-
-            await prepareForLeave();
-            const { entryCount } = await exportConversationPdf({
-                transcript,
-                translations,
-                preferredLanguage,
-                currentUserId: currentUserId || userId,
-                participants,
-            });
-            showToast(`Exported ${entryCount} conversation entr${entryCount === 1 ? "y" : "ies"}.`);
-            setLeaveDialog(false);
-            await completeLeave();
-
-        } catch (error) {
-
-            let message = "Unable to export the conversation. Please try again or leave without saving.";
-
-            message = error.message || message;
-
-            console.error("[EXPORT ERROR]", {
-                message,
-            });
-
-            setExportError(message);
-            setExportState("error");
-
-        }
 
     };
 
@@ -477,17 +470,6 @@ const BottomControls = ({
                     {screenSharing ? <FaStop /> : <FaDesktop />}
                 </button>
 
-                {/* DOWNLOAD TRANSCRIPT */}
-
-                <button
-                    className="control-btn"
-                    title="Download Transcript"
-                >
-
-                    <FaDownload />
-
-                </button>
-
             </div>
 
             {/* =================================
@@ -519,17 +501,7 @@ const BottomControls = ({
             <div
                 className="leave-dialog-backdrop"
                 role="presentation"
-                onMouseDown={() => {
-
-                    if (!exportState.startsWith("exporting")) {
-
-                        setLeaveDialog(false);
-                        setExportState("idle");
-                        setExportError("");
-
-                    }
-
-                }}
+                onMouseDown={handleCancelLeaveDialog}
             >
 
                 <section
@@ -541,75 +513,40 @@ const BottomControls = ({
                 >
 
                     <h2 id="leave-dialog-title">
-                        {exportState === "error"
-                            ? "Unable to export conversation"
-                            : "Save conversation before leaving?"}
+                        Save conversation before leaving?
                     </h2>
 
                     <p>
-                        {exportState === "error"
-                            ? exportError
-                            : "Download a PDF of this meeting in your preferred language before you leave."}
+                        Download a PDF of this meeting in your preferred language before you leave.
                     </p>
 
                     <div className="leave-dialog-actions">
 
-                        {exportState === "error" ? (
+                        <button
+                            className="leave-dialog-primary"
+                            onClick={handleSaveAndExport}
+                            disabled={isExporting || isLeaving}
+                        >
+                            {isExporting
+                                ? <><FaSpinner className="spin" /> Preparing PDF…</>
+                                : "Save & Export"}
+                        </button>
 
-                            <>
-                                <button
-                                    className="leave-dialog-export"
-                                    onClick={saveAndExport}
-                                    disabled={isLeaving}
-                                >
-                                    Try Again
-                                </button>
+                        <button
+                            className="leave-dialog-danger"
+                            onClick={handleLeaveWithoutSaving}
+                            disabled={isExporting || isLeaving}
+                        >
+                            {isLeaving ? "Leaving..." : "Leave Without Saving"}
+                        </button>
 
-                                <button
-                                    className="leave-dialog-danger"
-                                    onClick={leaveWithoutSaving}
-                                    disabled={isLeaving}
-                                >
-                                    Leave Without Saving
-                                </button>
-
-                                <button
-                                    className="leave-dialog-cancel"
-                                    onClick={() => setLeaveDialog(false)}
-                                >
-                                    Cancel
-                                </button>
-                            </>
-
-                        ) : (
-
-                            <>
-                                <button
-                                    className="leave-dialog-export"
-                                    onClick={saveAndExport}
-                                    disabled={exportState === "exporting" || isLeaving}
-                                >
-                                    {exportState === "exporting" ? "Exporting..." : "Save & Export"}
-                                </button>
-
-                                <button
-                                    className="leave-dialog-danger"
-                                    onClick={leaveWithoutSaving}
-                                    disabled={exportState === "exporting" || isLeaving}
-                                >
-                                    Leave Without Saving
-                                </button>
-
-                                <button
-                                    className="leave-dialog-cancel"
-                                    onClick={() => setLeaveDialog(false)}
-                                    disabled={exportState === "exporting"}
-                                >
-                                    Cancel
-                                </button>
-                            </>
-
-                        )}
+                        <button
+                            className="leave-dialog-cancel"
+                            onClick={handleCancelLeaveDialog}
+                            disabled={isExporting || isLeaving}
+                        >
+                            Cancel
+                        </button>
 
                     </div>
 

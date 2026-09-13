@@ -4,7 +4,8 @@ import { useLocation, useParams } from "react-router-dom";
 
 import {
     joinMeeting,
-    getMeeting
+    getMeeting,
+    getMeetingHistory,
 } from "../services/meetingService";
 
 import VideoGrid from "../components/meeting/VideoGrid";
@@ -16,7 +17,6 @@ import AddParticipants from "./AddParticipants";
 import websocketService from "../services/websocketService";
 import webrtcService from "../services/webrtcService";
 import audioService from "../services/audioService";
-import { API_BASE_URL } from "../services/apiConfig";
 import { getLanguageCode } from "../components/meeting/languageCode";
 
 // Minimum time between audio_stream sends
@@ -98,6 +98,16 @@ const MeetingRoom = () => {
     const [showAddParticipants, setShowAddParticipants] =
         useState(false);
 
+    // Keep the sidebar mounted while hidden so live transcript, chat, and
+    // translation state is never recreated when the user toggles the UI.
+    const [isMeetingUiVisible, setIsMeetingUiVisible] = useState(
+        () => sessionStorage.getItem(`meeting:${meetingId}:sidebar`) === "visible"
+    );
+
+    const [activePanelTab, setActivePanelTab] = useState(
+        () => sessionStorage.getItem(`meeting:${meetingId}:tab`) || "participants"
+    );
+
     const [mediaError, setMediaError] = useState("");
 
     const [microphoneMuted, setMicrophoneMuted] = useState(false);
@@ -122,6 +132,17 @@ const MeetingRoom = () => {
         useRef(0);
 
     const pendingTranscriptCorrectionsRef = useRef({});
+
+    useEffect(() => {
+        sessionStorage.setItem(
+            `meeting:${meetingId}:sidebar`,
+            isMeetingUiVisible ? "visible" : "hidden"
+        );
+    }, [isMeetingUiVisible, meetingId]);
+
+    useEffect(() => {
+        sessionStorage.setItem(`meeting:${meetingId}:tab`, activePanelTab);
+    }, [activePanelTab, meetingId]);
 
     const correctTranscript = (item, correctedText) => {
         pendingTranscriptCorrectionsRef.current[item.chunk_id] = item.text;
@@ -188,6 +209,7 @@ const MeetingRoom = () => {
         }
 
         let mounted = true;
+        const subtitleTimeouts = subtitleTimeoutsRef.current;
         const meetingSession = ++meetingSessionRef.current;
         const isCurrentSession = () => (
             mounted && meetingSessionRef.current === meetingSession
@@ -248,6 +270,12 @@ const MeetingRoom = () => {
                     meetingResponse?.meeting ||
                     meetingResponse?.data ||
                     meetingResponse;
+
+                const historyResponse = await getMeetingHistory(meetingId);
+                if (!isCurrentSession()) return;
+                setTranscript(historyResponse?.transcripts || []);
+                setTranslations(historyResponse?.translations || []);
+                setChatMessages(historyResponse?.chat_messages || []);
 
                 const currentMeetingType =
                     (
@@ -1304,7 +1332,7 @@ const MeetingRoom = () => {
             webrtcService.closeConnection();
 
             Object.values(
-                subtitleTimeoutsRef.current
+                subtitleTimeouts
             ).forEach(
                 (timeoutId) => {
                     clearTimeout(timeoutId);
@@ -1366,7 +1394,10 @@ const MeetingRoom = () => {
 
                 </div>
 
-                <ShowUIButton />
+                <ShowUIButton
+                    visible={isMeetingUiVisible}
+                    onToggle={() => setIsMeetingUiVisible((visible) => !visible)}
+                />
 
             </header>
 
@@ -1389,7 +1420,12 @@ const MeetingRoom = () => {
 
                 </section>
 
-                <aside className="meeting-right">
+                <aside
+                    className={`meeting-right ${
+                        isMeetingUiVisible ? "is-visible" : "is-hidden"
+                    }`}
+                    aria-hidden={!isMeetingUiVisible}
+                >
 
                     <RightSidebar
                         participants={
@@ -1427,6 +1463,9 @@ const MeetingRoom = () => {
                         onPreferencesSave={
                             saveMeetingPreferences
                         }
+
+                        activeTab={activePanelTab}
+                        onTabChange={setActivePanelTab}
 
                     />
 
@@ -1506,6 +1545,11 @@ const MeetingRoom = () => {
                         true
                     )
                 }
+
+                onOpenPanel={(tab) => {
+                    setActivePanelTab(tab);
+                    setIsMeetingUiVisible(true);
+                }}
 
             />
 

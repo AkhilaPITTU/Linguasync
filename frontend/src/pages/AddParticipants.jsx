@@ -24,11 +24,7 @@ const AddParticipants = ({ meetingId, onClose }) => {
     const [search, setSearch] = useState("");
     const [sending, setSending] = useState(false);
 
-    useEffect(() => {
-        loadUsers();
-    }, []);
-
-    const loadUsers = async () => {
+    async function loadUsers() {
         try {
             const response = await getUsers();
 
@@ -41,7 +37,11 @@ const AddParticipants = ({ meetingId, onClose }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }
+
+    useEffect(() => {
+        void Promise.resolve().then(loadUsers);
+    }, []);
 
     const toggleUser = (userId) => {
         if (selectedUsers.includes(userId)) {

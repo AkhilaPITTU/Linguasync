@@ -1,196 +1,346 @@
-from __future__ import annotations
+"""Orchestrates the "download my conversation as a signed PDF" feature and
+its counterpart, verifying a previously exported PDF.
+
+Deliberately reuses the existing, already-authorized meeting history read
+path (``app.services.meeting_service.get_meeting_history``) instead of
+re-querying the transcript/translation collections directly, so this
+feature can never diverge from -- or leak more than -- what a participant
+is already allowed to see in the running meeting.
+"""
 
 import asyncio
+import logging
+import os
 from datetime import datetime, timezone
-from io import BytesIO
-from pathlib import Path
-from urllib.parse import quote
-from xml.sax.saxutils import escape
+from uuid import uuid4
 
-from bson import ObjectId
-from app.ai.translation_service import translation_service
-from app.config.database import (
-    meetings_collection,
-    transcripts_collection,
-    translations_collection,
-    users_collection,
-)
+from app.ai.language_config import language_code
+from app.config.database import database, pdf_exports_collection
 from app.config.settings import settings
+from app.services.conversation_pdf_service import build_conversation_pdf
+from app.services.meeting_service import get_meeting_history
+from app.services.pdf_signature_service import (
+    SIGNATURE_ALGORITHM,
+    sign_pdf_bytes,
+    verify_pdf_bytes,
+)
+from app.utils.timezone_format import format_ist
+
+meetings_collection = database["meetings"]
+
+logger = logging.getLogger("linguasync.conversation_export")
 
 
-class ConversationExportError(Exception):
-    def __init__(self, status_code: int, message: str):
-        super().__init__(message)
-        self.status_code = status_code
-        self.message = message
+def _fmt_dt(value) -> str:
+    """Render a stored UTC timestamp for display purposes only, converted
+    to Indian Standard Time (IST). This is the single formatting entry
+    point every date/time shown by this module goes through -- meeting
+    started/ended times and each conversation entry's timestamp -- so the
+    UTC -> IST conversion lives in exactly one place. The value passed in
+    (and whatever collection it came from) is never modified; only the
+    returned display string differs.
+    """
+    return format_ist(value)
 
 
-def _clean_text(value) -> str:
-    return value.strip() if isinstance(value, str) else ""
+def _sort_key(entry) -> datetime:
+    timestamp = entry.get("timestamp")
+    if isinstance(timestamp, datetime):
+        return timestamp if timestamp.tzinfo else timestamp.replace(tzinfo=timezone.utc)
+    return datetime.min.replace(tzinfo=timezone.utc)
 
 
-def _safe_filename_part(value: str) -> str:
-    return "".join(character if character.isalnum() or character in "-_" else "_" for character in value)
+def _merge_entries(transcripts, translations, chat_messages, user_id) -> list:
+    """Build one chronological, per-viewer conversation from the raw
+    transcript/translation/chat records ``get_meeting_history`` returns.
+
+    Each transcript chunk is shown in whichever language it should
+    actually appear in *for this viewer*: their own words stay in the
+    language they spoke, everyone else's words use the translation
+    already generated for this viewer by the live translation pipeline
+    (never re-translated here). Chat messages follow the same rule using
+    the delivery record ``get_meeting_history`` already resolved.
+    """
+
+    normalized_user_id = str(user_id)
+
+    translation_index = {}
+    for translation in translations:
+        key = (translation.get("chunk_id"), str(translation.get("speaker_id")))
+        translation_index[key] = translation
+
+    entries = []
+
+    for record in transcripts:
+        speaker_id = str(record.get("speaker_id", ""))
+        is_own = speaker_id == normalized_user_id
+
+        if is_own:
+            text = record.get("text") or record.get("original_text") or ""
+            entry_language = record.get("language") or record.get("source_language") or "English"
+        else:
+            match = translation_index.get((record.get("chunk_id"), speaker_id))
+            if match and (match.get("translated_text") or match.get("text")):
+                text = match.get("translated_text") or match.get("text")
+                entry_language = match.get("target_language") or "English"
+            else:
+                # No translation was produced for this chunk (e.g. same
+                # source/target language, or the pipeline could not
+                # translate it) -- fall back to what was actually said
+                # rather than silently dropping the line.
+                text = record.get("text") or record.get("original_text") or ""
+                entry_language = record.get("language") or record.get("source_language") or "English"
+
+        if not text or not text.strip():
+            continue
+
+        entries.append(
+            {
+                "kind": "speech",
+                # Presentation-only personalization: the viewer's own lines
+                # are always labelled "You" in the exported PDF, regardless
+                # of what name was actually stored on the transcript record
+                # (which is left untouched -- see module docstring).
+                "speaker_name": "You" if is_own else record.get("speaker_name", "Participant"),
+                "language": entry_language,
+                "text": text.strip(),
+                "timestamp": record.get("created_at"),
+            }
+        )
+
+    for chat in chat_messages:
+        text = chat.get("text") or chat.get("original_text") or ""
+        if not text or not text.strip():
+            continue
+
+        is_own = str(chat.get("user_id")) == normalized_user_id
+        if is_own:
+            entry_language = chat.get("source_language") or "English"
+        else:
+            entry_language = "English" if not chat.get("is_translated") else (
+                chat.get("source_language") or "English"
+            )
+
+        entries.append(
+            {
+                "kind": "chat",
+                # Same presentation-only "You" substitution as above, applied
+                # to the viewer's own chat messages.
+                "speaker_name": "You" if is_own else (chat.get("name") or chat.get("user_name") or "Participant"),
+                "language": entry_language,
+                "text": f"[Chat] {text.strip()}",
+                "timestamp": chat.get("time"),
+            }
+        )
+
+    entries.sort(key=_sort_key)
+
+    for entry in entries:
+        entry["timestamp_display"] = _fmt_dt(entry.get("timestamp"))
+
+    return entries
 
 
-def _register_unicode_font() -> str:
-    try:
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-    except ImportError as error:
-        raise ConversationExportError(
-            500,
-            "PDF export is not installed on this server. Please contact the administrator.",
-        ) from error
+async def export_conversation_pdf(meeting_id: str, user_id: str, language: str | None = None) -> dict:
+    """Build, sign, persist and log a PDF of ``user_id``'s own view of
+    ``meeting_id``. Returns a plain result dict; never raises for
+    expected/authorization failures (the controller maps those to HTTP
+    status codes), only for genuinely unexpected errors.
+    """
 
-    font_path = Path(settings.PDF_UNICODE_FONT_PATH)
-    if not font_path.is_file():
-        raise ConversationExportError(500, "A Unicode PDF font is not configured on this server.")
-
-    font_name = "LinguasyncUnicode"
-    if font_name not in pdfmetrics.getRegisteredFontNames():
-        try:
-            pdfmetrics.registerFont(TTFont(font_name, str(font_path), subfontIndex=0))
-        except Exception as error:
-            raise ConversationExportError(500, "The configured Unicode PDF font could not be loaded.") from error
-    return font_name
-
-
-async def export_conversation_pdf(meeting_id: str, requester_id: str):
-    """Build one private, requester-language PDF from persisted meeting transcripts."""
-    stage = "meeting_lookup"
-    print(f"[conversation-export] started meeting_id={meeting_id}")
     meeting = await meetings_collection.find_one({"meeting_id": meeting_id})
     if not meeting:
-        raise ConversationExportError(404, "Meeting not found.")
+        return {"success": False, "status": 404, "message": "Meeting not found."}
 
-    participant = next((item for item in meeting.get("participants", []) if str(item.get("user_id", "")) == str(requester_id)), None)
-    if not participant:
-        raise ConversationExportError(403, "You are not a participant of this meeting.")
+    participants = meeting.get("participants", [])
+    viewer_participant = next(
+        (p for p in participants if str(p.get("user_id")) == str(user_id)), None
+    )
+    if viewer_participant is None:
+        return {
+            "success": False,
+            "status": 403,
+            "message": "You are not a participant in this meeting.",
+        }
 
-    preferred_language = _clean_text(participant.get("preferred_language") or participant.get("language"))
-    if not preferred_language:
-        raise ConversationExportError(422, "Your preferred language is not available for this meeting.")
-    print(
-        f"[conversation-export] meeting_id={meeting_id} "
-        f"preferred_language={preferred_language}"
+    history = await get_meeting_history(meeting_id, user_id)
+    if not history.get("success"):
+        # get_meeting_history already re-checks participation; surface its
+        # message rather than duplicating the authorization logic here.
+        return {"success": False, "status": 403, "message": history.get("message", "Access denied.")}
+
+    requested_language = (language or viewer_participant.get("preferred_language") or "English").strip()
+    if not language_code(requested_language):
+        return {
+            "success": False,
+            "status": 400,
+            "message": f"'{requested_language}' is not a supported LinguaSync language.",
+        }
+
+    entries = _merge_entries(
+        history.get("transcripts", []),
+        history.get("translations", []),
+        history.get("chat_messages", []),
+        user_id,
     )
 
+    meeting_view = {
+        "meeting_id": meeting_id,
+        "display_title": f"LinguaSync {meeting.get('meeting_type', 'video').capitalize()} Meeting",
+        "started_at_display": _fmt_dt(meeting.get("started_at")),
+        "ended_at_display": _fmt_dt(meeting.get("ended_at")) if meeting.get("ended_at") else None,
+    }
+
+    participant_views = [
+        {
+            "user_name": participant.get("user_name", "Participant"),
+            "preferred_language": participant.get("preferred_language") or participant.get("language") or "-",
+            "is_host": str(participant.get("user_id")) == str(meeting.get("host_id")),
+        }
+        for participant in participants
+    ]
+
+    document_id = str(uuid4())
+    generated_at = datetime.now(timezone.utc)
+
     try:
-        requester = await users_collection.find_one({"_id": ObjectId(requester_id)}, {"full_name": 1})
-    except Exception:
-        requester = None
-    requester_name = _clean_text((requester or {}).get("full_name")) or _clean_text(participant.get("user_name")) or "Participant"
-
-    stage = "conversation_lookup"
-    transcript_count = await transcripts_collection.count_documents({"meeting_id": meeting_id})
-    print(
-        f"[conversation-export] meeting_id={meeting_id} "
-        f"conversation_records={transcript_count}"
-    )
-
-    cursor = transcripts_collection.find({"meeting_id": meeting_id}).sort("created_at", 1)
-    conversation = []
-    seen_records = set()
-    async for record in cursor:
-        record_key = str(record.get("chunk_id") or record.get("_id") or "")
-        if record_key and record_key in seen_records:
-            continue
-        if record_key:
-            seen_records.add(record_key)
-
-        text = _clean_text(record.get("text") or record.get("corrected_text") or record.get("original_text"))
-        if not text:
-            continue
-        source_language = _clean_text(record.get("source_language") or record.get("language")) or "en"
-
-        stored_translation = None
-        chunk_id = record.get("chunk_id")
-        if chunk_id:
-            stored_translation = await translations_collection.find_one({
-                "meeting_id": meeting_id,
-                "chunk_id": chunk_id,
-                "target_language": preferred_language,
-                "$or": [
-                    {"recipient_id": str(requester_id)},
-                    {"user_id": str(requester_id)},
-                ],
-            })
-
-        translated_text = _clean_text((stored_translation or {}).get("translated_text") or (stored_translation or {}).get("text"))
-        if not translated_text:
-            stage = "translation"
-            try:
-                translation = await asyncio.to_thread(
-                    translation_service.translate,
-                    text,
-                    source_lang=source_language,
-                    target_lang=preferred_language,
-                )
-                if translation.get("success"):
-                    translated_text = _clean_text(translation.get("translated_text"))
-                if not translated_text:
-                    print(
-                        f"[conversation-export] translation_fallback "
-                        f"meeting_id={meeting_id} reason={translation.get('reason', 'empty_result')}"
-                    )
-            except Exception as error:
-                print(
-                    f"[conversation-export] translation_fallback "
-                    f"meeting_id={meeting_id} error={type(error).__name__}"
-                )
-
-        # One unavailable translation must not prevent a user from exporting
-        # the complete persisted conversation. The saved original transcript
-        # is always safer than omitting the entry or returning a JSON error.
-        if not translated_text:
-            translated_text = text
-        conversation.append({"speaker_name": _clean_text(record.get("speaker_name")) or "Participant", "text": translated_text})
-
-    if not conversation:
-        raise ConversationExportError(404, "No conversation is available to export.")
-
-    stage = "pdf_generation"
-    print(f"[conversation-export] translation_completed meeting_id={meeting_id}")
-    print(f"[conversation-export] pdf_generation_started meeting_id={meeting_id}")
-    try:
-        pdf_bytes = _build_pdf(meeting_id, requester_name, preferred_language, conversation)
-    except ConversationExportError:
-        raise
-    except Exception as error:
-        print(
-            f"[conversation-export] failed stage={stage} "
-            f"error={type(error).__name__}"
+        # Both calls are synchronous/CPU-bound (reportlab layout, RSA
+        # signing) and pyHanko's signer additionally drives its own
+        # asyncio.run() internally, which cannot be called from inside the
+        # event loop this async function is already running on -- so both
+        # run on a worker thread, the same pattern already used for
+        # translation_service.translate in the live meeting pipeline.
+        pdf_bytes = await asyncio.to_thread(
+            build_conversation_pdf,
+            meeting=meeting_view,
+            participants=participant_views,
+            entries=entries,
+            viewer={"user_id": str(user_id), "user_name": viewer_participant.get("user_name", "Participant")},
+            language=requested_language,
+            document_id=document_id,
+            generated_at=generated_at,
         )
-        raise ConversationExportError(500, "The conversation PDF could not be generated.") from error
-    print(f"[conversation-export] pdf_generation_completed meeting_id={meeting_id}")
-    filename = f"LINGUASYNC_Meeting_{_safe_filename_part(meeting_id)}_{_safe_filename_part(preferred_language)}.pdf"
-    return pdf_bytes, filename
+        signed_bytes = await asyncio.to_thread(
+            sign_pdf_bytes,
+            pdf_bytes,
+            reason=f"LinguaSync conversation export for meeting {meeting_id}",
+        )
+    except Exception:
+        logger.exception(
+            "PDF build/sign failed -> meeting_id=%s user_id=%s language=%s",
+            meeting_id, user_id, requested_language,
+        )
+        return {"success": False, "status": 500, "message": "Unable to generate the conversation PDF."}
+
+    export_dir = os.path.join(settings.TRANSCRIPT_EXPORT_FOLDER, "signed")
+    file_path = None
+    try:
+        os.makedirs(export_dir, exist_ok=True)
+        file_path = os.path.join(export_dir, f"{document_id}.pdf")
+        with open(file_path, "wb") as export_file:
+            export_file.write(signed_bytes)
+    except OSError:
+        # Persisting a copy on disk is an audit convenience, not a
+        # prerequisite for the download itself -- never fail the export
+        # over a filesystem/permissions issue.
+        logger.warning("Could not persist a copy of PDF export %s to disk.", document_id, exc_info=True)
+        file_path = None
+
+    record = {
+        "user_id": str(user_id),
+        "meeting_id": meeting_id,
+        "document_id": document_id,
+        "language": requested_language,
+        "generated_at": generated_at,
+        "signature_algorithm": SIGNATURE_ALGORITHM,
+        "exported_by": str(user_id),
+        "verification_status": "unverified",
+        "file_path": file_path,
+    }
+
+    try:
+        await pdf_exports_collection.insert_one(record)
+    except Exception:
+        # The export itself already succeeded and the user is waiting for
+        # their file; a logging-store failure must not block delivery.
+        logger.exception("Could not persist export metadata for document_id=%s", document_id)
+
+    logger.info(
+        "PDF export event -> user_id=%s meeting_id=%s document_id=%s language=%s "
+        "entries=%s size_bytes=%s",
+        user_id, meeting_id, document_id, requested_language, len(entries), len(signed_bytes),
+    )
+
+    filename = f"linguasync_conversation_{meeting_id[:8]}_{document_id[:8]}.pdf"
+    return {
+        "success": True,
+        "pdf_bytes": signed_bytes,
+        "filename": filename,
+        "document_id": document_id,
+    }
 
 
-def _build_pdf(meeting_id: str, requester_name: str, preferred_language: str, conversation: list[dict]) -> bytes:
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import mm
-    from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer
+async def verify_conversation_pdf(file_bytes: bytes, verified_by: str | None) -> dict:
+    """Cryptographically verify an uploaded PDF and, best-effort, correlate
+    it back to its export-log entry by the Document ID embedded at
+    generation time."""
 
-    font_name = _register_unicode_font()
-    output = BytesIO()
-    document = SimpleDocTemplate(output, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=18 * mm, title="LINGUASYNC Meeting Conversation", author="LINGUASYNC")
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("LinguaTitle", parent=styles["Title"], fontName=font_name, fontSize=22, leading=28, textColor=colors.HexColor("#25205c"), alignment=TA_LEFT)
-    meta_style = ParagraphStyle("LinguaMeta", parent=styles["Normal"], fontName=font_name, fontSize=10.5, leading=16, textColor=colors.HexColor("#334155"))
-    speaker_style = ParagraphStyle("LinguaSpeaker", parent=styles["Normal"], fontName=font_name, fontSize=11, leading=16, textColor=colors.HexColor("#1e293b"), spaceBefore=9)
-    text_style = ParagraphStyle("LinguaText", parent=styles["Normal"], fontName=font_name, fontSize=11, leading=18, textColor=colors.HexColor("#0f172a"), leftIndent=8)
-    now = datetime.now(timezone.utc).astimezone().strftime("%d %b %Y, %I:%M %p")
-    story = [Paragraph("LINGUASYNC", title_style), Paragraph("Meeting Conversation", meta_style), Spacer(1, 7 * mm), Paragraph(f"<b>Exported for:</b> {escape(requester_name)}", meta_style), Paragraph(f"<b>Language:</b> {escape(preferred_language)}", meta_style), Paragraph(f"<b>Meeting:</b> {escape(meeting_id)}", meta_style), Paragraph(f"<b>Date:</b> {now}", meta_style), Spacer(1, 5 * mm), HRFlowable(width="100%", thickness=0.7, color=colors.HexColor("#cbd5e1")), Spacer(1, 3 * mm)]
-    for entry in conversation:
-        story.extend([Paragraph(f"<b>{escape(entry['speaker_name'])}:</b>", speaker_style), Paragraph(escape(entry["text"]), text_style)])
-    document.build(story)
-    return output.getvalue()
+    # verify_pdf_bytes performs its own signature-validation pass through
+    # pyHanko, which (like signing) drives its own event loop internally --
+    # see the comment in export_conversation_pdf above.
+    result = await asyncio.to_thread(verify_pdf_bytes, file_bytes)
+    document_id = result.get("document_id")
 
+    record = None
+    if document_id:
+        try:
+            record = await pdf_exports_collection.find_one({"document_id": document_id})
+        except Exception:
+            logger.exception("Could not look up export record for document_id=%s", document_id)
 
-def content_disposition(filename: str) -> str:
-    return f"attachment; filename*=UTF-8''{quote(filename)}"
+    if not result.get("signed"):
+        verification_status = "unsigned"
+    elif result.get("signature_valid"):
+        verification_status = "valid"
+    elif result.get("document_modified"):
+        verification_status = "tampered"
+    else:
+        verification_status = "invalid"
+
+    if record and document_id:
+        try:
+            await pdf_exports_collection.update_one(
+                {"document_id": document_id},
+                {
+                    "$set": {
+                        "verification_status": verification_status,
+                        "last_verified_at": datetime.now(timezone.utc),
+                        "last_verified_by": verified_by,
+                    }
+                },
+            )
+        except Exception:
+            logger.exception("Could not update verification status for document_id=%s", document_id)
+
+    logger.info(
+        "PDF verify event -> verified_by=%s document_id=%s status=%s",
+        verified_by, document_id, verification_status,
+    )
+
+    generated_at = record.get("generated_at") if record else None
+
+    return {
+        "success": True,
+        "signature_valid": bool(result.get("signature_valid")),
+        "document_modified": result.get("document_modified"),
+        "signed": bool(result.get("signed")),
+        "verification_status": verification_status,
+        "document_id": document_id,
+        "meeting_id": record.get("meeting_id") if record else None,
+        "generated_at": generated_at.isoformat() if isinstance(generated_at, datetime) else generated_at,
+        "language": record.get("language") if record else None,
+        "signature_algorithm": (record or {}).get("signature_algorithm") or SIGNATURE_ALGORITHM,
+        "signer": result.get("signer_common_name"),
+        "signing_time": result.get("signing_time"),
+        "message": result.get("error"),
+    }

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, File, Header, UploadFile
 from pydantic import BaseModel, Field
 
-from app.controllers.profile_controller import get_profile, update_profile
+from app.controllers.profile_controller import get_profile, update_profile, update_profile_image
 
 
 class UpdateProfileSchema(BaseModel):
@@ -26,3 +26,11 @@ async def update_current_profile(
     authorization: str = Header(...),
 ):
     return await update_profile(data, authorization)
+
+
+@router.put("/image")
+async def update_current_profile_image(
+    image: UploadFile = File(...),
+    authorization: str = Header(...),
+):
+    return await update_profile_image(image, authorization)

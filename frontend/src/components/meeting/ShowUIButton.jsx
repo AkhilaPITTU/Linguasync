@@ -1,19 +1,21 @@
 import "./ShowUIButton.css";
-import { FaEye } from "react-icons/fa";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
-const ShowUIButton = ({ onShow }) => {
+const ShowUIButton = ({ visible = false, onToggle }) => {
 
     return (
 
         <button
             className="show-ui-button"
-            onClick={onShow}
-            title="Show Workspace"
+            type="button"
+            onClick={onToggle}
+            title={visible ? "Hide meeting panel" : "Show meeting panel"}
+            aria-expanded={visible}
         >
 
-            <FaEye />
+            {visible ? <FaEyeSlash /> : <FaEye />}
 
-            <span>Show UI</span>
+            <span>{visible ? "Hide UI" : "Show UI"}</span>
 
         </button>
 
