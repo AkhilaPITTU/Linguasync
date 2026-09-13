@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 import requests
 
@@ -108,6 +109,26 @@ class TranslationService:
         source_code = self.get_language_code(source_lang, default=None)
         target_code = self.get_language_code(target_lang, default=None)
         if not source_code or not target_code:
+            # Diagnostics only -- does not change the returned reason/behavior
+            # below. Logged separately for source and target so a caller
+            # reading Render logs can tell at a glance which side of the
+            # language pair failed to resolve, without guessing from the
+            # combined "unsupported_language" reason alone.
+            if not target_code:
+                print(
+                    "Unsupported recipient language: "
+                    f"{target_lang}\nResolved language code: {target_code!r}"
+                )
+            if not source_code:
+                print(
+                    "Unsupported source language: "
+                    f"{source_lang}\nResolved language code: {source_code!r}"
+                )
+            logger.error(
+                "Language resolution failed -> source_lang=%r source_code=%r "
+                "target_lang=%r target_code=%r",
+                source_lang, source_code, target_lang, target_code,
+            )
             return {
                 "success": False,
                 "translated_text": None,
@@ -166,7 +187,31 @@ class TranslationService:
         except (requests.RequestException, ValueError, TypeError) as error:
             # Translation must never interrupt a live meeting. Return source
             # text as a usable subtitle when the public service is unavailable.
-            logger.warning("MyMemory translation failed: %s", error)
+            # This is a genuine failure of the MyMemory call, not a normal
+            # outcome -- log it loudly and with full context so Render logs
+            # identify the exact cause (timeout, DNS failure, HTTP error,
+            # connection error, invalid JSON, ...) instead of the failure
+            # being indistinguishable from a real, successful translation.
+            failed_at = datetime.now(timezone.utc).isoformat()
+            logger.error(
+                "MyMemory translation failed: exception_type=%s exception_message=%s "
+                "source_language=%s target_language=%s input_text_preview=%r timestamp=%s",
+                type(error).__name__,
+                str(error),
+                source_code,
+                target_code,
+                cleaned_text[:100],
+                failed_at,
+            )
+            print(
+                "===============================\n"
+                "TRANSLATION FAILED\n"
+                f"Source: {source_code}\n"
+                f"Target: {target_code}\n"
+                f"Reason: {error}\n"
+                "Falling back to original transcript.\n"
+                "==============================="
+            )
             return {
                 "success": True,
                 "translated_text": cleaned_text,

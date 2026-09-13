@@ -734,6 +734,20 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                 f"[translation-routing] chunk_id={chunk_id} recipient_id={recipient_id} "
                 "unsupported_recipient_language; delivering original transcript"
             )
+            # Diagnostics only -- the fallback result below is unchanged.
+            # Makes clear in Render logs that this recipient never reached
+            # MyMemory at all: their stored preferred_language could not be
+            # resolved to a supported code, as distinct from a MyMemory
+            # call that was attempted and failed.
+            print(
+                f"Unsupported recipient language: {language}\n"
+                f"Resolved language code: {target_code!r}"
+            )
+            logger.error(
+                "Unsupported recipient language -> chunk_id=%s recipient_id=%s "
+                "preferred_language=%r resolved_language_code=%r",
+                chunk_id, recipient_id, language, target_code,
+            )
             result = {
                 "success": True,
                 "translated_text": job["transcript"],
@@ -755,6 +769,17 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                     target_lang=language,
                 )
         elapsed = perf_counter() - started
+        # Unconditional summary of what translate_service.translate() (or the
+        # unsupported-recipient-language shortcut above) actually returned,
+        # regardless of which branch produced it -- so Render logs always
+        # show success/reason/translated_text for this chunk+recipient
+        # without having to cross-reference the branch-specific prints above.
+        print(
+            "Translation Result\n"
+            f"success: {result.get('success')}\n"
+            f"reason: {result.get('reason')}\n"
+            f"translated_text: {result.get('translated_text')!r}"
+        )
         print(
             f"[SUBTITLE-TRANSLATE] meeting_id={meeting_id} speaker_id={job['user_id']} "
             f"recipient_id={recipient_id} target_language={language!r} "
@@ -813,6 +838,24 @@ async def _postprocess_transcript(meeting_id: str, job: dict):
                 f"user_id={recipient_id} chunk_id={chunk_id} saved=False "
                 f"error={type(error).__name__}: {error}"
             )
+        # The fallback behavior itself is unchanged (the original transcript
+        # is still delivered so the meeting is never interrupted) -- but a
+        # fallback result must never look identical to a real translation in
+        # Render logs. Warn loudly right before the WebSocket send whenever
+        # this recipient is about to receive their own untranslated
+        # transcript labeled as a translation.
+        if result.get("reason") in ("translation_fallback", "unsupported_recipient_language"):
+            print(
+                f"[TRANSLATION-WARNING] chunk_id={chunk_id} recipient_id={recipient_id} "
+                f"reason={result.get('reason')} -- sending ORIGINAL transcript to recipient "
+                f"as a fallback subtitle, not a real translation into {language!r}."
+            )
+            logger.warning(
+                "Sending untranslated fallback subtitle -> chunk_id=%s recipient_id=%s "
+                "reason=%s target_language=%r",
+                chunk_id, recipient_id, result.get("reason"), language,
+            )
+
         # Translated voice/TTS is never generated: the original speaker's
         # audio is always preserved and delivered via WebRTC, and translation
         # applies only to the text/subtitle layer.
