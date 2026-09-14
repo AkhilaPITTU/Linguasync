@@ -486,6 +486,32 @@ async def _process_audio_chunk(
         print(f"[audio-worker] user={user_id} chunk_id={chunk_id} postprocess_queue={postprocess_queue.qsize()}/{MAX_POSTPROCESS_CHUNKS}")
 
     except Exception as e:
+        # Diagnostic-only addition: this except block previously had no
+        # print/logger statement at all, so ANY exception raised anywhere
+        # in the try block above (e.g. the transcripts_collection.update_one
+        # Mongo write, or anything else between the transcript broadcast and
+        # the job being queued for translation) was completely invisible in
+        # Render logs -- only a generic {"type": "error"} WS message was
+        # sent to the client, with zero server-side trace. This is why
+        # "no logs related to translation" could appear even when a chunk
+        # never made it far enough to reach the translation stage at all.
+        # The WS message sent to the client below is unchanged.
+        import traceback
+        _chunk_id_for_log = locals().get("chunk_id", "unknown")
+        print(
+            "===============================\n"
+            "AUDIO-CHUNK PROCESSING FAILED (previously-silent exception)\n"
+            f"meeting_id={meeting_id} user_id={user_id} chunk_id={_chunk_id_for_log}\n"
+            f"exception_type={type(e).__name__} exception_message={e}\n"
+            f"traceback:\n{traceback.format_exc()}"
+            "==============================="
+        )
+        logger.error(
+            "_process_audio_chunk failed -> meeting_id=%s user_id=%s chunk_id=%s "
+            "exception_type=%s exception_message=%s",
+            meeting_id, user_id, _chunk_id_for_log, type(e).__name__, str(e),
+            exc_info=True,
+        )
         await manager.send_personal_message(
             {
                 "type": "error",
