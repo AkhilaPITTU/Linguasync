@@ -1,9 +1,10 @@
 # Python 3.11 / Render runtime dependencies for LINGUASYNC.
-# Translation uses Google Translate's free web endpoint (via deep-translator,
-# no API key); no local model is retained. Previously used the public
-# MyMemory REST API, replaced because MyMemory's free tier aggressively
-# rate-limits/blocks shared cloud IPs (such as Render's), which silently
-# returned untranslated text as a false "success".
+# Translation uses the DeepL API (requires DEEPL_API_KEY in the environment);
+# no local model is retained. Previously used Google Translate's free web
+# endpoint (via deep-translator) and, before that, the public MyMemory REST
+# API -- both replaced because their free, unauthenticated endpoints
+# silently rate-limit/block shared cloud IPs (such as Render's), which could
+# return untranslated text as a false "success".
 
 # Web application and persistence
 fastapi==0.140.0
@@ -22,9 +23,9 @@ fastapi-mail==1.6.5
 numpy==2.4.6
 av==18.0.0
 
-# Translation API client
+# Translation API client (DeepL, called directly over HTTPS via `requests`;
+# no dedicated DeepL client library is needed)
 requests==2.34.2
-deep-translator==1.11.4
 
 # Existing application features
 edge-tts==7.2.8

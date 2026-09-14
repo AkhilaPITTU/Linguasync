@@ -1,28 +1,52 @@
-import concurrent.futures
 import logging
+import os
 from datetime import datetime, timezone
 
-from deep_translator import GoogleTranslator
+import requests
+from dotenv import load_dotenv
 
 from app.ai.language_config import LANGUAGE_ALIASES, SUPPORTED_LANGUAGES, language_code
 
+load_dotenv()
 
-# How long a single translation call may run before it's treated as a
-# failure and the original transcript is delivered instead. Google's free
-# web-translate endpoint (reached via deep-translator) exposes no timeout
-# parameter of its own, so this is enforced with a worker-thread deadline
-# inside translate() below rather than via a `requests` kwarg.
 REQUEST_TIMEOUT_SECONDS = 15
+
+DEEPL_API_KEY = os.getenv("DEEPL_API_KEY", "").strip()
+# DeepL issues two kinds of keys: a Free-tier key (always ends with the
+# literal suffix ":fx") which must call the api-free.deepl.com host, and a
+# Pro/paid key which calls api.deepl.com. Using the wrong host for a given
+# key returns an authentication error even though the key itself is valid.
+DEEPL_API_URL = (
+    "https://api-free.deepl.com/v2/translate"
+    if DEEPL_API_KEY.endswith(":fx")
+    else "https://api.deepl.com/v2/translate"
+)
 
 
 LANGUAGE_CODES = SUPPORTED_LANGUAGES
 _LANGUAGE_ALIASES = LANGUAGE_ALIASES
 
+# This app's internal ISO codes (from language_config.SUPPORTED_LANGUAGES)
+# mapped to DeepL's own language codes. DeepL's *source* codes are the plain
+# upper-cased ISO code, but its *target* codes require a region suffix for
+# English specifically -- DeepL rejects a bare "EN" as a target language,
+# it must be "EN-US" or "EN-GB". If DeepL does not actually support a given
+# code (this app's language list includes a few, such as Kannada, whose
+# DeepL support is unconfirmed), the API call below will fail with a clear
+# "target_lang not supported"-style error from DeepL itself, which is
+# caught, logged, and falls back to the original transcript exactly like
+# any other translation failure -- it will not crash the meeting.
+_DEEPL_SOURCE_CODES = {
+    "en": "EN", "hi": "HI", "te": "TE", "ta": "TA", "kn": "KN",
+    "bn": "BN", "mr": "MR", "gu": "GU", "pa": "PA", "ur": "UR",
+    "as": "AS", "ne": "NE",
+}
+_DEEPL_TARGET_CODES = {**_DEEPL_SOURCE_CODES, "en": "EN-US"}
+
 # Kept as a fast, known-good shortcut for very short, common phrases (this
 # started as a workaround for MyMemory mistranslating them; retained after
-# the switch to Google Translate below since it's still a free, zero-latency
-# safety net and does no harm). Longer, less common phrases go through
-# Google Translate.
+# the switch to DeepL below since it's still a free, zero-latency safety net
+# and does no harm). Longer, less common phrases go through DeepL.
 COMMON_TRANSLATIONS = {
     ("en", "hi"): {
         "hello": "नमस्ते",
@@ -68,15 +92,16 @@ logger = logging.getLogger(__name__)
 
 
 class TranslationService:
-    """Translate text through Google Translate's free web endpoint (via the
-    deep-translator library) without retaining local ML models.
+    """Translate text through the DeepL API (an authenticated, quota-based
+    service) without retaining local ML models.
 
-    Previously used MyMemory's REST API (api.mymemory.translated.net). That
-    was replaced because MyMemory's free tier is aggressively IP-rate-limited
-    and would silently return the untranslated source text -- marked as a
-    "success" -- whenever a request from a shared cloud/datacenter IP (such
-    as Render's) got throttled. Google Translate's free endpoint has no API
-    key either, but is far less likely to reject a Render-origin request.
+    Previously used Google Translate's free/unofficial web endpoint (via
+    deep-translator), and before that MyMemory's free REST API. Both were
+    replaced because their free, unauthenticated endpoints silently
+    rate-limit or block requests from shared cloud IPs (such as Render's).
+    DeepL is a real authenticated API with a documented per-account quota
+    instead of an IP-based throttle on a scraped page, so it does not share
+    that failure mode.
     """
 
     def get_language_code(self, language, default="en"):
@@ -86,7 +111,7 @@ class TranslationService:
             return default
 
         # Clients and legacy MongoDB records can use BCP-47 values such as
-        # ``hi-IN``. Deepgram and Google Translate require the base ISO code.
+        # ``hi-IN``. Deepgram and DeepL both require the base ISO code.
         return language_code(normalized, default)
 
     def _lookup_common_translation(self, cleaned_text, source_code, target_code):
@@ -97,8 +122,7 @@ class TranslationService:
         (casefold) and ignores surrounding/trailing punctuation, so "Hello",
         "hello!" and "Hello." all match the same "hello" entry. Returns
         None when there is no dictionary for the language pair or no match
-        for the phrase, in which case the caller should fall back to
-        Google Translate.
+        for the phrase, in which case the caller should fall back to DeepL.
         """
         phrase_map = COMMON_TRANSLATIONS.get((source_code, target_code))
         if not phrase_map:
@@ -158,74 +182,114 @@ class TranslationService:
                 "reason": None,
             }
 
-        # Short-phrase dictionary lookup: bypass Google Translate entirely
-        # for common greetings/short phrases (kept as a free, instant
-        # shortcut for the highest-traffic phrases).
+        # Short-phrase dictionary lookup: bypass DeepL entirely for common
+        # greetings/short phrases (kept as a free, instant shortcut for the
+        # highest-traffic phrases).
         common_translation = self._lookup_common_translation(
             cleaned_text, source_code, target_code
         )
         if common_translation is not None:
-            logger.info("Common phrase translation used (Google Translate not called)")
+            logger.info("Common phrase translation used (DeepL not called)")
             return {
                 "success": True,
                 "translated_text": common_translation,
                 "reason": None,
             }
 
+        if not DEEPL_API_KEY:
+            logger.error("DEEPL_API_KEY is not set; cannot call the DeepL API")
+            print(
+                "DeepL API key is not configured "
+                "(DEEPL_API_KEY env var is missing or empty)."
+            )
+            return {
+                "success": True,
+                "translated_text": cleaned_text,
+                "reason": "translation_fallback",
+                "message": "DeepL API key is not configured.",
+            }
+
+        deepl_source = _DEEPL_SOURCE_CODES.get(source_code)
+        deepl_target = _DEEPL_TARGET_CODES.get(target_code)
+        if not deepl_source or not deepl_target:
+            logger.error(
+                "No DeepL language-code mapping for source_code=%s target_code=%s",
+                source_code, target_code,
+            )
+            print(
+                "DeepL language mapping unavailable: "
+                f"source_code={source_code!r} target_code={target_code!r}"
+            )
+            return {
+                "success": True,
+                "translated_text": cleaned_text,
+                "reason": "translation_fallback",
+                "message": "DeepL language mapping unavailable for this language pair.",
+            }
+
         try:
-            # Run the blocking call in its own worker thread with a hard
-            # deadline. GoogleTranslator (deep-translator) makes a plain
-            # `requests.get` internally with no timeout of its own, so
-            # without this a stalled connection could hang indefinitely --
-            # exactly what REQUEST_TIMEOUT_SECONDS previously guarded
-            # against via `requests.get(..., timeout=...)`.
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    self._call_google_translate, cleaned_text, source_code, target_code
-                )
-                translated_text = future.result(timeout=REQUEST_TIMEOUT_SECONDS)
+            response = requests.post(
+                DEEPL_API_URL,
+                headers={"Authorization": f"DeepL-Auth-Key {DEEPL_API_KEY}"},
+                data={
+                    "text": cleaned_text,
+                    "source_lang": deepl_source,
+                    "target_lang": deepl_target,
+                },
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            translations = payload.get("translations") or []
+            translated_text = translations[0].get("text") if translations else None
 
             if not isinstance(translated_text, str) or not translated_text.strip():
-                raise ValueError("Google Translate returned an empty translation")
+                raise ValueError("DeepL response did not contain translated text")
 
-            logger.info("Google Translate successful")
+            logger.info("DeepL translation successful")
             return {
                 "success": True,
                 "translated_text": translated_text.strip(),
                 "reason": None,
             }
-        except Exception as error:
+        except (requests.RequestException, ValueError, TypeError, KeyError, IndexError) as error:
             # Translation must never interrupt a live meeting. Return source
-            # text as a usable subtitle when Google Translate is unavailable.
-            # This is a genuine failure of the translate call, not a normal
-            # outcome -- log it loudly and with full context so Render logs
-            # identify the exact cause (timeout, DNS failure, HTTP error,
-            # connection error, rate limiting, invalid response, ...)
-            # instead of the failure being indistinguishable from a real,
-            # successful translation. Caught broadly (not just
-            # requests.RequestException) because deep-translator raises its
-            # own exception types (TooManyRequests, RequestError,
-            # TranslationNotFound, ...) that don't all share one base class,
-            # and a bare concurrent.futures.TimeoutError on a stalled call
-            # needs to be caught here too.
+            # text as a usable subtitle when DeepL is unavailable. This is a
+            # genuine failure of the DeepL call, not a normal outcome -- log
+            # it loudly and with full context (including DeepL's own error
+            # body, which names things like an unsupported target_lang
+            # explicitly) so Render logs identify the exact cause instead of
+            # the failure being indistinguishable from a real, successful
+            # translation.
+            response_body_preview = None
+            response_obj = getattr(error, "response", None)
+            if response_obj is not None:
+                try:
+                    response_body_preview = response_obj.text[:300]
+                except Exception:
+                    response_body_preview = None
+
             failed_at = datetime.now(timezone.utc).isoformat()
             logger.error(
-                "Google Translate request failed: exception_type=%s exception_message=%s "
-                "source_language=%s target_language=%s input_text_preview=%r timestamp=%s",
+                "DeepL translation request failed: exception_type=%s exception_message=%s "
+                "source_language=%s target_language=%s input_text_preview=%r "
+                "response_body_preview=%r timestamp=%s",
                 type(error).__name__,
                 str(error),
-                source_code,
-                target_code,
+                deepl_source,
+                deepl_target,
                 cleaned_text[:100],
+                response_body_preview,
                 failed_at,
             )
             print(
                 "===============================\n"
                 "TRANSLATION FAILED\n"
-                f"Source: {source_code}\n"
-                f"Target: {target_code}\n"
+                f"Source: {deepl_source}\n"
+                f"Target: {deepl_target}\n"
                 f"Reason: {error}\n"
-                "Falling back to original transcript.\n"
+                + (f"DeepL response: {response_body_preview}\n" if response_body_preview else "")
+                + "Falling back to original transcript.\n"
                 "==============================="
             )
             return {
@@ -234,11 +298,6 @@ class TranslationService:
                 "reason": "translation_fallback",
                 "message": str(error),
             }
-
-    @staticmethod
-    def _call_google_translate(text, source_code, target_code):
-        """Blocking call executed in a worker thread by translate() above."""
-        return GoogleTranslator(source=source_code, target=target_code).translate(text)
 
 
 translation_service = TranslationService()
